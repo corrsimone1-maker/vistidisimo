@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#120d1f">
+  <meta name="color-scheme" content="dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Visti">
+  <meta name="description" content="Le serie e i film che ho visto.">
+  <title>vistidisimo</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="preload" href="fonts/unbounded-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="app.css?v=1">
+  <script type="module" src="js/main.js?v=1"></script>
+</head>
+<body>
+  <main id="view" tabindex="-1"></main>
+  <nav id="tabs" aria-label="Sezioni">
+    <a href="#/home" data-tab="home">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 10.8 12 3.6l8.5 7.2"/><path d="M5.8 9.4V20h4.6v-5.6h3.2V20h4.6V9.4"/></svg>
+      <span>Home</span>
+    </a>
+    <a href="#/libreria" data-tab="libreria">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="9" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="5" rx="1.6"/><rect x="13.5" y="11.5" width="7" height="9" rx="1.6"/><rect x="3.5" y="15.5" width="7" height="5" rx="1.6"/></svg>
+      <span>Libreria</span>
+    </a>
+    <a href="#/cerca" data-tab="cerca">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m20 20-4.2-4.2"/></svg>
+      <span>Cerca</span>
+    </a>
+    <a href="#/prossimi" data-tab="prossimi">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.2" y="4.6" width="17.6" height="16" rx="2.6"/><path d="M3.2 9.4h17.6M8 2.8v3.6M16 2.8v3.6"/><path d="m10.4 12.4 4.2 2.6-4.2 2.6z" fill="currentColor"/></svg>
+      <span>Prossimi</span>
+    </a>
+  </nav>
+  <div id="sheet-root"></div>
+  <div id="toast-root" aria-live="polite"></div>
+</body>
+</html>
