@@ -50,6 +50,11 @@ export function backButton() {
   return html`<button class="icon-btn back" data-act="back" aria-label="Indietro">${icon.back}</button>`;
 }
 
+export function syncBanner() {
+  if (S.sync.state !== 'error') return '';
+  return html`<a class="banner bad" href="#/impostazioni"><span>${S.sync.msg}</span><b>Apri Impostazioni</b></a>`;
+}
+
 export function metaBanner() {
   const j = S.metaJob;
   if (!j || !j.firstBuild) return '';

@@ -24,6 +24,7 @@ export const S = {
   metaJob: null, // { done, total }
   loaded: false,
   lastFetch: 0,
+  lastSaved: null,
 };
 
 const subs = new Set();
@@ -154,6 +155,8 @@ export async function flush() {
       try {
         const newSha = await ghPut('library.json', serialize(next), sha, commitMessage(sending));
         S.base = next; S.baseSha = newSha;
+        S.lastSaved = new Date().toISOString();
+        LS.set('vds.lastSaved', S.lastSaved);
         break;
       } catch (e) {
         if (e instanceof GhError && e.conflict && attempt < 4) continue;
@@ -167,7 +170,7 @@ export async function flush() {
     setSync(S.ops.length ? 'saving' : 'idle');
   } catch (e) {
     console.error(e);
-    setSync('error', e.auth ? 'Il token GitHub non funziona più: rigeneralo e incollalo in Impostazioni.' : `Salvataggio non riuscito (${e.message}). Riprovo tra poco.`);
+    setSync('error', e.auth ? 'Il token GitHub non funziona più (forse è scaduto). Le modifiche restano su questo dispositivo: incolla un token nuovo in Impostazioni e partono da sole.' : `Salvataggio non riuscito (${e.message}). Le modifiche restano su questo dispositivo e riprovo tra poco.`);
     if (!e.auth) scheduleFlush(20000);
   } finally {
     flushing = false;
@@ -180,6 +183,7 @@ export function loadCache() {
   const b = LS.get('vds.base');
   if (b) { S.base = b.doc; S.baseSha = b.sha; }
   S.ops = LS.get('vds.ops', []);
+  S.lastSaved = LS.get('vds.lastSaved', null);
   const m = LS.get('vds.meta');
   if (m) { S.meta = m.doc; S.metaSha = m.sha; }
   materialize();
@@ -210,14 +214,14 @@ export async function pull() {
     S.loaded = true;
     S.lastFetch = Date.now();
     materialize();
-    if (S.sync.state !== 'error') setSync(S.ops.length ? 'saving' : 'idle');
+    setSync(S.ops.length ? 'saving' : 'idle');
     notify();
     if (S.ops.length) flush();
     return true;
   } catch (e) {
     console.error(e);
     S.loaded = !!S.base;
-    setSync('error', e.auth ? 'Il token GitHub non funziona: controllalo in Impostazioni.' : `Non riesco a leggere la libreria (${e.message}).`);
+    setSync('error', e.auth ? 'Il token GitHub non funziona più (forse è scaduto). Incolla un token nuovo in Impostazioni: i dati sono al sicuro nella repo.' : `Non riesco a raggiungere GitHub (${e.message}). Ti mostro l’ultima copia salvata su questo dispositivo.`);
     return false;
   }
 }
@@ -350,7 +354,7 @@ export async function saveConfig(patch) {
 }
 
 export function forgetDevice() {
-  ['vds.ghToken', 'vds.tmdbToken', 'vds.base', 'vds.ops', 'vds.meta', 'vds.libf', 'vds.upTab'].forEach(LS.del);
+  ['vds.ghToken', 'vds.tmdbToken', 'vds.base', 'vds.ops', 'vds.meta', 'vds.libf', 'vds.upTab', 'vds.lastSaved'].forEach(LS.del);
 }
 
 export function resetMetaCache() {

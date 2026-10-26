@@ -1,7 +1,7 @@
 import { html, icon, img } from '../ui.js';
 import { lib, metaOf, S } from '../store.js';
 import { stats, splitTime, listProgress, byLast } from '../derive.js';
-import { cardFor, syncDot, metaBanner } from './common.js';
+import { cardFor, syncDot, metaBanner, syncBanner } from './common.js';
 
 function timeValue(min) {
   const { months, days, hours } = splitTime(min);
@@ -51,6 +51,7 @@ export function renderHome() {
     <h1 class="wordmark">vistidisimo</h1>
     <a class="icon-btn" href="#/impostazioni" aria-label="Impostazioni">${syncDot()}${icon.sliders}</a>
   </header>
+  ${syncBanner()}
   ${metaBanner()}
   <section class="stats" aria-label="Statistiche">
     <div class="stat"><span class="stat-l">Tempo davanti alle serie</span><span class="stat-v">${metaReady ? timeValue(st.tvMin) : '…'}</span></div>
