@@ -229,6 +229,20 @@ svg { width: 22px; height: 22px; flex: none; }
   align-items: center; justify-content: center; gap: 8px; aspect-ratio: 1;
   border: 1.5px dashed var(--filo); border-radius: 12px; color: var(--lilla); font-weight: 700; font-size: 13px;
 }
+.push-right { margin-left: auto; }
+.hint { margin: -4px var(--gut) 14px; color: var(--testo-2); font-size: 13.5px; }
+.reorder { list-style: none; margin: 0; padding: 0 var(--gut); display: flex; flex-direction: column; gap: 8px; }
+.ro-row {
+  display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; gap: 12px;
+  padding: 8px 6px 8px 8px; border-radius: 14px; background: var(--velluto);
+  transition: transform .18s cubic-bezier(.2, .8, .2, 1);
+}
+.ro-row.dragging { transition: none; position: relative; z-index: 2; background: var(--velluto-2); box-shadow: 0 10px 30px rgba(0, 0, 0, .5), 0 0 0 1px rgba(201, 179, 255, .45), 0 0 18px rgba(201, 179, 255, .18); }
+.ro-thumb { width: 44px; aspect-ratio: 2 / 3; border-radius: 6px; overflow: hidden; background: var(--velluto-2); }
+.ro-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.ro-name { font: 650 14px/1.25 var(--f-disp); letter-spacing: -.02em; min-width: 0; overflow-wrap: anywhere; }
+.ro-name small { display: block; font: 600 12px var(--f-ui); color: var(--testo-3); letter-spacing: 0; margin-top: 2px; }
+.ro-handle { display: grid; place-items: center; width: 44px; height: 44px; color: var(--testo-2); touch-action: none; cursor: grab; }
 .list-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 22px 14px; padding: 0 var(--gut); }
 .list-head { padding: 0 var(--gut) 20px; }
 .list-pct { display: flex; align-items: baseline; gap: 8px; }

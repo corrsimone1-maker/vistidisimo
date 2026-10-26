@@ -83,6 +83,15 @@ function applyOp(doc, op) {
     case 'ldel':
       doc.lists = doc.lists.filter((l) => l.id !== op.id);
       break;
+    case 'lorder': {
+      // nuovo ordine delle liste; quelle non citate (create altrove nel frattempo) restano in fondo
+      const pos = new Map(op.ids.map((id, i) => [id, i]));
+      doc.lists = doc.lists
+        .map((l, i) => ({ l, k: pos.has(l.id) ? pos.get(l.id) : op.ids.length + i }))
+        .sort((a, b) => a.k - b.k)
+        .map((x) => x.l);
+      break;
+    }
     case 'ladd': {
       const l = doc.lists.find((x) => x.id === op.id);
       if (l && !l.items.some((e) => e.key === op.entry.key)) l.items.push(op.entry);

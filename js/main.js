@@ -6,7 +6,7 @@ import { renderLibrary, libraryActions, libraryInputs } from './views/library.js
 import { renderSearch, searchInputs } from './views/search.js';
 import { renderUpcoming, upcomingActions } from './views/upcoming.js';
 import { renderDetail, detailActions } from './views/detail.js';
-import { renderLists, renderList, listActions } from './views/lists.js';
+import { renderLists, renderList, listActions, initReorder } from './views/lists.js';
 import { renderSettings, settingsActions } from './views/settings.js';
 
 const view = document.getElementById('view');
@@ -71,6 +71,7 @@ function rerender() {
 let rerenderTimer = null;
 let lastRerender = 0;
 function scheduleRerender() {
+  if (document.body.classList.contains('hold-render')) { clearTimeout(rerenderTimer); rerenderTimer = setTimeout(scheduleRerender, 300); return; }
   const gap = S.metaJob ? 900 : 0;
   const wait = Math.max(0, lastRerender + gap - Date.now());
   clearTimeout(rerenderTimer);
@@ -129,6 +130,7 @@ document.addEventListener('change', (ev) => {
 });
 
 window.addEventListener('hashchange', onHash);
+initReorder();
 subscribe(scheduleRerender);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') { flush(); saveMeta(); return; }

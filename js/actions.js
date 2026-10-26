@@ -116,4 +116,5 @@ export function createList(title) {
 export function renameList(id, title) { dispatch({ op: 'lset', id, fields: { title }, msg: `Rinomina lista ${title}` }); }
 export function deleteList(id, title) { dispatch({ op: 'ldel', id, msg: `Elimina lista ${title}` }); }
 export function addToList(id, entry) { dispatch({ op: 'ladd', id, entry, msg: `Aggiunge ${entry.title} a una lista` }); }
+export function reorderLists(ids) { dispatch({ op: 'lorder', ids, msg: 'Riordina le liste' }); }
 export function removeFromList(id, key) { dispatch({ op: 'lrem', id, key, msg: 'Toglie un titolo da una lista' }); }
