@@ -1,0 +1,77 @@
+# vistidisimo — istruzioni per Claude
+
+Web app personale di Simo per tenere traccia di serie TV, film e anime visti (sostituisce TV Time, chiuso a luglio 2026, e Refract). Interfaccia, testi e messaggi di commit in **italiano**.
+
+- App (GitHub Pages, repo pubblica): https://corrsimone1-maker.github.io/vistidisimo/
+- Dati (repo **privata**): `corrsimone1-maker/vistidisimo-dati` — vedi il suo `CLAUDE.md`
+- Simo gestisce da solo le impostazioni di GitHub Pages; Claude costruisce, prova e fa push su `main`.
+- Simo la usa su iPhone (app aggiunta alla schermata Home), iPad e Mac. È solo per lui: niente account, niente amici, niente social.
+
+## Architettura
+
+HTML/CSS/JS statici, moduli ES senza build né dipendenze. Niente framework.
+
+| File | Cosa fa |
+|---|---|
+| `index.html`, `app.css` | pagina, barra in basso, tema |
+| `js/main.js` | router a hash, ridisegno delle schermate, delega degli eventi (`data-act`, `data-input`), avvio |
+| `js/store.js` | stato, coda delle operazioni, sincronizzazione con GitHub, cache TMDB (`meta.json`), correzione numerazione episodi |
+| `js/github.js` | API Contents di GitHub (`ghGet`/`ghPut`), `serialize` (una voce per riga). **`OWNER` e `DATA_REPO` sono scritti qui** |
+| `js/tmdb.js` | API TMDB (lingua `it-IT`), `metaFromDetails`, `fetchSeason`, `pool` (max 6 richieste insieme) |
+| `js/derive.js` | avanzamento, stato automatico, prossimo episodio, anime, statistiche, % liste |
+| `js/actions.js` | azioni utente → operazioni |
+| `js/ui.js` | template `html` con escape, icone SVG, locandina (`posterCard`), fogli dal basso, avvisi, date |
+| `js/views/*.js` | schermate: `home`, `library`, `search`, `upcoming` (Prossimi), `detail`, `lists`, `settings` |
+| `sw.js` | service worker: rete prima, cache solo come ripiego offline |
+| `dev/` | prove con Playwright e API finte (vedi sotto). Non fa parte dell'app |
+
+Rotte: `#/home`, `#/raccolta/<serie|film|serie-preferite|film-preferiti>`, `#/libreria`, `#/cerca`, `#/prossimi`, `#/t/<tv|movie>/<id>`, `#/liste`, `#/lista/<id>`, `#/impostazioni`.
+
+### Sincronizzazione (non romperla)
+- Ogni azione è un'**operazione** (`add`, `set`, `del`, `eps`, `lnew`, `lset`, `ldel`, `ladd`, `lrem`, `lorder`) messa in coda in `localStorage` (`vds.ops`). La libreria mostrata = ultima versione scaricata (`vds.base`) + operazioni in coda.
+- `flush()` parte 1,5 s dopo l'ultima azione, quando l'app va in background e al ritorno online. Riapplica le operazioni sull'ultima versione di GitHub; se lo sha non torna (409/422), riscarica e riprova. Così due dispositivi non si sovrascrivono.
+- Ogni salvataggio è un commit su `library.json` con un messaggio leggibile (`op.msg`).
+- Token scaduto o sbagliato (401/403): la coda resta sul dispositivo, in Home compare un avviso rosso, e incollando un token nuovo in Impostazioni la coda parte da sola.
+- Nuove operazioni: aggiungile ad `applyOp` in `store.js` in modo che riapplicarle due volte non faccia danni.
+
+### Token
+- Token GitHub *fine-grained* con accesso solo a `vistidisimo-dati`, permesso Contents in lettura/scrittura. Sta in `localStorage` (`vds.ghToken`) su ogni dispositivo.
+- Chiave TMDB (API Read Access Token, usata come Bearer) in `vds.tmdbToken` e in `config.json` nella repo dati, così gli altri dispositivi la prendono da lì.
+- **Mai** chiedere a Simo di incollare i token in chat, mai scriverli nel codice o nei commit.
+
+## Modello dati (riassunto)
+Chiave `tipo:idTMDB` (`tv:48866`, `movie:129`). Stati: `planned` da guardare, `watching` in corso, `uptodate` in pari, `completed` completata/visto, `dropped` abbandonata. Non esiste "in pausa": Simo l'ha tolto. Episodi: `eps[stagione][episodio] = "YYYY-MM-DD"` (o `""`), stagione `0` = speciali. Formato completo nel README della repo dati.
+
+`meta.json` (cache TMDB, chiavi corte): `t` titolo, `ot` originale, `y` anno, `p` locandina, `b` sfondo, `g` generi, `l` lingua, `c` paesi, `rt` durata, `st` stato TMDB, `ss` stagioni `[n, episodi, data]`, `le` ultimo uscito `[s, e, data]`, `ne` prossimo `[s, e, data, nome]`, `rd` uscita film, `at` timestamp. Si aggiorna da solo: serie in corso ogni 12 h, finite ogni 30 giorni, film ogni 60.
+
+## Scelte di Simo (rispettale)
+- **Tema scuro**: notte violacea con lilla e neon blu/rosa. Font self-hosted: Unbounded (titoli, numeri) + Manrope (testo).
+- **Barra sotto ogni locandina** che si riempie con l'avanzamento, colorata per stato: viola completata, blu da guardare, giallo in corso, verde in pari, rosso abbandonata.
+- **Iconcina** in alto a sinistra sulla locandina: film o serie; rosa se è un anime (dice comunque se è film o serie).
+- **Voto** da 0.1 a 10.0 con una cifra decimale, per tutta la serie o il film. Mai voti a episodi o stagioni. Il voto si vede **solo nella pagina del titolo**, non sulle locandine.
+- **Niente** community, reazioni, mood, recensioni social.
+- **Home** come il vecchio TV Time: statistiche in piccolo, ultime serie, ultimi film, serie preferite, film preferiti, liste. Ordine per ultima attività (`last`), nessun tasto per riordinare. Mettere voto o preferito non cambia `last`.
+- **Barra in basso**: Home (casetta), Libreria, Cerca, Prossimi.
+- **Libreria**: categorie Serie / Film / Anime (disgiunte, anime = serie+film anime), selezionabili singolarmente o tutte; filtro per stato; ordinamento.
+- **Prossimi**: "Da vedere" (prossimo episodio delle serie in corso/in pari, più "Da iniziare") e "In uscita".
+- **Liste**: % completata = media dell'avanzamento dei titoli dentro; riordinabili trascinando (pagina Liste → Riordina), l'ordine vale anche in Home.
+- **Anime**: animazione (genere 16) + lingua `ja` o paese `JP`; correggibile a mano dal menu ⋯ (`anime: true/false`).
+- **Icona**: quella della prima versione (televisore al neon con antenne a V e barra dentro, generata in Python/PIL). Simo ha bocciato le alternative (occhio, versioni a linea sottile): non cambiarla senza che lo chieda.
+
+## Insidie note
+- Alcuni anime su TMDB usano numerazione **assoluta** (Naruto Shippuden: la stagione 2 parte dal 33). `isAbsolute`/`epRange` in `derive.js` la gestiscono; `repairNumbering` in `store.js` sposta le stagioni importate da TV Time numerate da 1. Su One Piece e Naruto i dati importati sono comunque in parte incoerenti: non "correggerli" in automatico senza chiedere.
+- `airedCount` usa `le` (ultimo episodio uscito); `nextEpisode` parte dall'ultimo episodio visto più avanti, non dal primo buco.
+- Variabili colore: i default `--c` stanno in `:where(...)` per non battere le classi `st-*` — non rimettere `--c` dentro `.status-pill`, `.check-btn`, `.opt`, `.tube`.
+
+## Rilasci
+A ogni modifica che cambia CSS o JS: aumenta `?v=` di `app.css` e `js/main.js` in `index.html`, `CACHE` in `sw.js` e `VERSION` in `js/views/settings.js`. Poi commit in italiano e push su `main`.
+
+## Prove
+Dal container non si raggiungono TMDB e le immagini: si prova con API finte.
+```bash
+cd dev && node prova-completa.js /percorso/screenshot   # primo avvio, tutte le schermate, conflitto tra dispositivi
+node prova-anime.js /percorso/screenshot                 # numerazione assoluta, colori di stato, ricarica dalla cache
+node prova-token.js /percorso/screenshot                 # token scaduto e ripresa, esportazione CSV
+node prova-liste.js /percorso/screenshot                 # riordino delle liste trascinando
+```
+Le due repo devono stare una accanto all'altra (le prove leggono `../vistidisimo-dati/library.json` senza modificarlo). `mock.js` simula l'API Contents di GitHub (con sha e 409), TMDB (dettagli, stagioni, ricerca, tendenze) e le immagini. Viewport 393×852 come l'iPhone di Simo; guarda sempre gli screenshot.

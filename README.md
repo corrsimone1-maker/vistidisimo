@@ -27,5 +27,7 @@ La barra sotto ogni locandina si riempie con l'avanzamento e ha il colore dello 
 - `js/actions.js` — azioni dell'utente
 - `js/views/` — le schermate
 - `sw.js`, `manifest.webmanifest`, `icons/` — installazione sulla schermata Home
+- `dev/` — prove automatiche con API finte (non fanno parte dell'app)
+- `CLAUDE.md` — istruzioni per Claude, per lavorarci da altre chat
 
 Font: Unbounded e Manrope (SIL Open Font License). Dati e immagini da TMDB: questa app usa l'API di TMDB ma non è approvata né certificata da TMDB.
