@@ -57,7 +57,7 @@ Chiave `tipo:idTMDB` (`tv:48866`, `movie:129`). Stati: `planned` da guardare, `w
 - **Prossimi**: "Da vedere" (prossimo episodio delle serie in corso/in pari, più "Da iniziare") e "In uscita".
 - **Liste**: % completata = media dell'avanzamento dei titoli dentro; riordinabili trascinando (pagina Liste → Riordina), l'ordine vale anche in Home.
 - **Anime**: animazione (genere 16) + lingua `ja` o paese `JP`; correggibile a mano dal menu ⋯ (`anime: true/false`).
-- **Icona**: quella della prima versione (televisore al neon con antenne a V e barra dentro, generata in Python/PIL), file `icons/tv-*.png`. Simo ha bocciato le alternative (occhio, versioni a linea sottile): non cambiarla senza che lo chieda. Se mai la si cambia, usa **nomi di file nuovi**: iOS e GitHub Pages tengono in cache le icone con lo stesso nome.
+- **Icona**: ciak con popcorn, pellicola e stelline sui toni viola/rosa, scelta da Simo il 27/10/2026 (immagine sua, originale in `icons/sorgente-ciak.png`). Ritagliata, angoli riempiti col colore del bordo, leggermente ingrandita, e con «vds» al neon scritto sul ciak a destra della stella. File `icons/ciak-*.png`. Prima c'era il televisore al neon; occhio e versioni a linea sottile bocciati. Non cambiarla senza che lo chieda; se la si cambia usa **nomi di file nuovi**, perché iOS e GitHub Pages tengono in cache le icone con lo stesso nome.
 
 ## Insidie note
 - Alcuni anime su TMDB usano numerazione **assoluta** (Naruto Shippuden: la stagione 2 parte dal 33). `isAbsolute`/`epRange` in `derive.js` la gestiscono; `repairNumbering` in `store.js` sposta le stagioni importate da TV Time numerate da 1. Su One Piece e Naruto i dati importati sono comunque in parte incoerenti: non "correggerli" in automatico senza chiedere.
