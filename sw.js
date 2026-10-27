@@ -1,6 +1,6 @@
 // Service worker: tiene una copia dell'app per aprirla anche offline. Prima prova la rete,
 // così gli aggiornamenti arrivano subito; le API (GitHub, TMDB) non passano da qui.
-const CACHE = 'vistidisimo-v7';
+const CACHE = 'vistidisimo-v8';
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => {
@@ -15,7 +15,9 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET' || url.origin !== self.location.origin) return;
   e.respondWith((async () => {
     try {
-      const res = await fetch(e.request);
+      // no-cache: chiede sempre al server se il file è cambiato (risposta 304 se uguale),
+      // così non si mischiano file vecchi e nuovi dopo un aggiornamento
+      const res = await fetch(e.request.url, { cache: 'no-cache', credentials: 'same-origin' });
       if (res.ok) { const c = await caches.open(CACHE); c.put(e.request, res.clone()); }
       return res;
     } catch {

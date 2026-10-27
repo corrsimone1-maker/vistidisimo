@@ -138,6 +138,8 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('online', () => flush());
 
+window.__vdsBooted = true;
+
 async function boot() {
   loadCache();
   renderRoute();

@@ -501,6 +501,11 @@ body.no-tabs #toast-root { bottom: calc(var(--safe-b) + 16px); }
 .set-status { margin: 0; font-weight: 700; font-size: 14px; }
 .set-status.bad { color: #ff8299; }
 
+.rescue { margin: 40px var(--gut) 0; padding: 20px; border-radius: 18px; background: var(--velluto); }
+.rescue h1 { margin: 0 0 10px; font: 650 20px/1.2 var(--f-disp); letter-spacing: -.02em; }
+.rescue p { color: var(--testo-2); font-size: 14.5px; }
+.rescue-err { font-size: 12px !important; color: var(--testo-3) !important; overflow-wrap: anywhere; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }

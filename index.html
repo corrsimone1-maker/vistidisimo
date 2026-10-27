@@ -11,13 +11,56 @@
   <meta name="apple-mobile-web-app-title" content="Visti">
   <meta name="description" content="Le serie e i film che ho visto.">
   <title>vistidisimo</title>
-  <link rel="manifest" href="manifest.webmanifest?v=5">
+  <link rel="manifest" href="manifest.webmanifest?v=8">
   <link rel="icon" type="image/png" href="icons/tv-icon-192.png">
   <link rel="apple-touch-icon" href="icons/tv-apple-touch-icon.png">
   <link rel="preload" href="fonts/unbounded-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/manrope-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="app.css?v=5">
-  <script type="module" src="js/main.js?v=5"></script>
+  <link rel="stylesheet" href="app.css?v=8">
+  <script type="importmap">
+{
+  "imports": {
+    "./js/actions.js": "./js/actions.js?v=8",
+    "./js/derive.js": "./js/derive.js?v=8",
+    "./js/github.js": "./js/github.js?v=8",
+    "./js/main.js": "./js/main.js?v=8",
+    "./js/store.js": "./js/store.js?v=8",
+    "./js/tmdb.js": "./js/tmdb.js?v=8",
+    "./js/ui.js": "./js/ui.js?v=8",
+    "./js/views/common.js": "./js/views/common.js?v=8",
+    "./js/views/detail.js": "./js/views/detail.js?v=8",
+    "./js/views/home.js": "./js/views/home.js?v=8",
+    "./js/views/library.js": "./js/views/library.js?v=8",
+    "./js/views/lists.js": "./js/views/lists.js?v=8",
+    "./js/views/search.js": "./js/views/search.js?v=8",
+    "./js/views/settings.js": "./js/views/settings.js?v=8",
+    "./js/views/upcoming.js": "./js/views/upcoming.js?v=8"
+  }
+}
+  </script>
+  <script>
+    // Se l'app non parte entro qualche secondo (di solito file vecchi rimasti in cache dopo un
+    // aggiornamento), mostra un pulsante che svuota la cache dell'app e ricarica. Token e dati restano.
+    (function () {
+      var err = '';
+      window.addEventListener('error', function (e) { err = (e && (e.message || (e.error && e.error.message))) || err; }, true);
+      setTimeout(function () {
+        if (window.__vdsBooted) return;
+        var v = document.getElementById('view');
+        if (!v) return;
+        v.innerHTML = '<div class="rescue"><h1>L’app non è partita</h1><p>Di solito succede quando il telefono tiene in cache i file della versione precedente. Tocca il pulsante: svuoto la cache dell’app e la riapro. Token e dati non si toccano.</p><button id="rescue-btn" class="btn primary wide">Ripara e riapri</button><p class="rescue-err"></p></div>';
+        v.querySelector('.rescue-err').textContent = err;
+        document.getElementById('rescue-btn').onclick = function () {
+          var go = function () { location.replace(location.pathname + '?r=' + Date.now() + (location.hash || '')); };
+          var jobs = [];
+          if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); }));
+          if (window.caches) jobs.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }));
+          Promise.all(jobs).then(go, go);
+        };
+      }, 7000);
+    })();
+  </script>
+  <script type="module" src="js/main.js?v=8"></script>
 </head>
 <body>
   <main id="view" tabindex="-1"></main>

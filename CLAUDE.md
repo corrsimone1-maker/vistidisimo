@@ -65,7 +65,9 @@ Chiave `tipo:idTMDB` (`tv:48866`, `movie:129`). Stati: `planned` da guardare, `w
 - Variabili colore: i default `--c` stanno in `:where(...)` per non battere le classi `st-*` — non rimettere `--c` dentro `.status-pill`, `.check-btn`, `.opt`, `.tube`.
 
 ## Rilasci
-A ogni modifica che cambia CSS o JS: aumenta `?v=` di `app.css` e `js/main.js` in `index.html`, `CACHE` in `sw.js` e `VERSION` in `js/views/settings.js`. Poi commit in italiano e push su `main`.
+A ogni modifica che cambia CSS o JS: `python3 dev/versione.py N` con N = versione attuale + 1 (la vedi in `VERSION` di `js/views/settings.js`). Lo script aggiorna la **mappa degli import** in `index.html` (ogni modulo JS con `?v=N`), `app.css`/`main.js`/manifest, la cache di `sw.js` e `VERSION`. Poi commit in italiano e push su `main`.
+
+Perché: GitHub Pages fa tenere i file in cache per 10 minuti; senza indirizzi nuovi il telefono può caricare un modulo nuovo che importa qualcosa da uno vecchio e l'app non parte (è successo il 27/10/2026). Se nasce un nuovo file JS lo script lo aggiunge da solo alla mappa. In `index.html` c'è anche un controllo di emergenza: se l'app non parte entro 7 s mostra «Ripara e riapri», che svuota service worker e cache (non `localStorage`) e ricarica. `main.js` segnala l'avvio con `window.__vdsBooted`.
 
 ## Prove
 Dal container non si raggiungono TMDB e le immagini: si prova con API finte.
@@ -75,5 +77,7 @@ node prova-anime.js /percorso/screenshot                 # numerazione assoluta,
 node prova-token.js /percorso/screenshot                 # token scaduto e ripresa, esportazione CSV
 node prova-liste.js /percorso/screenshot                 # riordino delle liste trascinando
 node prova-cerca.js /percorso/screenshot                 # ricerca: righe con titoli leggibili anche per gli anime
+node prova-avvio.js /percorso/screenshot                 # moduli tutti con ?v=N e schermata «Ripara e riapri» se un modulo è vecchio
+node prova-dati-veri.js /percorso/screenshot             # apre ogni schermata con library.json e meta.json veri
 ```
 Le due repo devono stare una accanto all'altra (le prove leggono `../vistidisimo-dati/library.json` senza modificarlo). `mock.js` simula l'API Contents di GitHub (con sha e 409), TMDB (dettagli, stagioni, ricerca, tendenze) e le immagini. Viewport 393×852 come l'iPhone di Simo; guarda sempre gli screenshot.
