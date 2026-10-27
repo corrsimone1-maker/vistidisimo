@@ -90,8 +90,9 @@ export function progress(it, m) {
   if (it.status === 'completed') return 1;
   const w = watchedCount(it);
   const tot = totalEpisodes(m);
-  if (!tot) return it.status === 'uptodate' ? 1 : (w ? 0.5 : 0);
-  return Math.min(1, w / tot);
+  if (!tot) return it.status === 'uptodate' ? 1 : (w ? 0.05 : 0);
+  // proporzione vera, ma con un minimo visibile (1 episodio su 1000 resta un trattino, non sparisce)
+  return Math.min(1, Math.max(w ? 0.04 : 0, w / tot));
 }
 
 // Stato dopo aver segnato o tolto episodi.

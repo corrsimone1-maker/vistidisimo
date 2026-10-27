@@ -1,5 +1,5 @@
 // Azioni dell'utente: ognuna produce operazioni sulla libreria.
-import { dispatch, item, metaOf } from './store.js';
+import { dispatch, item, metaOf, ensureMeta } from './store.js';
 import { autoStatus, unwatchedBefore, unwatchedAired } from './derive.js';
 import { today, toast, statusLabel } from './ui.js';
 
@@ -19,6 +19,7 @@ export function ensureItem(key, info, status = 'planned') {
   if (type === 'tv') it.eps = {};
   if (type === 'movie' && status === 'completed') it.seen = today();
   dispatch({ op: 'add', key, item: it, msg: `Aggiunge ${it.title}` });
+  ensureMeta(key);
 }
 
 function updateStatusAfterEps(key) {

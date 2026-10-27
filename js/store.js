@@ -355,6 +355,19 @@ export function scheduleMetaSave() {
   metaSaveTimer = setTimeout(() => { if (!metaRunning) saveMeta(); }, 8000);
 }
 
+// Scarica subito i dati TMDB di un titolo appena aggiunto (episodi totali, locandina…),
+// senza aspettare il prossimo avvio dell'app.
+const metaPending = new Set();
+export async function ensureMeta(key) {
+  if (S.meta.items[key] || metaPending.has(key) || !tmdbToken()) return;
+  metaPending.add(key);
+  try {
+    const [type, id] = key.split(':');
+    const d = await fetchDetails(type, Number(id));
+    if (d && !S.meta.items[key]) { putMeta(key, metaFromDetails(type, d)); scheduleMetaSave(); notify(); }
+  } catch (e) { console.warn('meta', key, e); } finally { metaPending.delete(key); }
+}
+
 // Scrive config.json (condiviso tra i dispositivi).
 export async function saveConfig(patch) {
   const r = await ghGet('config.json');

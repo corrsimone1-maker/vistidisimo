@@ -46,14 +46,14 @@ Chiave `tipo:idTMDB` (`tv:48866`, `movie:129`). Stati: `planned` da guardare, `w
 
 ## Scelte di Simo (rispettale)
 - **Tema scuro**: notte violacea con lilla e neon blu/rosa. Font self-hosted: Unbounded (titoli, numeri) + Manrope (testo).
-- **Barra sotto ogni locandina** che si riempie con l'avanzamento, colorata per stato: viola completata, blu da guardare, giallo in corso, verde in pari, rosso abbandonata.
+- **Barra sotto ogni locandina** che si riempie con l'avanzamento (episodi visti / episodi totali su TMDB, con un minimo visibile del 4%), colorata per stato: viola completata, blu da guardare, giallo in corso, verde in pari, rosso abbandonata.
 - **Iconcina** in alto a sinistra sulla locandina: film o serie; rosa se è un anime (dice comunque se è film o serie).
 - **Voto** da 0.1 a 10.0 con una cifra decimale, per tutta la serie o il film. Mai voti a episodi o stagioni. Il voto si vede **solo nella pagina del titolo**, non sulle locandine.
 - **Niente** community, reazioni, mood, recensioni social.
 - **Home** come il vecchio TV Time: statistiche in piccolo, ultime serie, ultimi film, serie preferite, film preferiti, liste. Ordine per ultima attività (`last`), nessun tasto per riordinare. Mettere voto o preferito non cambia `last`.
 - **Barra in basso**: Home (casetta), Libreria, Cerca, Prossimi.
 - **Libreria**: categorie Serie / Film / Anime (disgiunte, anime = serie+film anime), selezionabili singolarmente o tutte; filtro per stato; ordinamento.
-- **Cerca**: risultati in righe con titolo, tipo (Serie/Film, anime), anno, titolo originale, trama e stato se è già in libreria — Simo deve distinguere serie, film e OVA con lo stesso nome. Se il titolo italiano di TMDB è in scrittura non latina (anime senza traduzione) si usa quello inglese (`nonLatin` in `tmdb.js`, ricerca fatta anche in `en-US`).
+- **Cerca**: due viste con un tasto in alto (scelta ricordata in `vds.searchView`): elenco con titolo, tipo (Serie/Film, anime), anno, titolo originale e stato se è già in libreria (**niente trama**: troppe informazioni), oppure griglia compatta di locandine con il titolo tradotto sotto, piccolo. Simo deve distinguere serie, film e OVA con lo stesso nome. Se il titolo italiano di TMDB è in scrittura non latina (anime senza traduzione) si usa quello inglese (`nonLatin` in `tmdb.js`, ricerca fatta anche in `en-US`).
 - **Prossimi**: "Da vedere" (prossimo episodio delle serie in corso/in pari, più "Da iniziare") e "In uscita".
 - **Liste**: % completata = media dell'avanzamento dei titoli dentro; riordinabili trascinando (pagina Liste → Riordina), l'ordine vale anche in Home.
 - **Anime**: animazione (genere 16) + lingua `ja` o paese `JP`; correggibile a mano dal menu ⋯ (`anime: true/false`).

@@ -1,10 +1,10 @@
-import { html, icon, img, kindBadge, statusLabel, tube } from '../ui.js';
+import { html, icon, img, kindBadge, statusLabel, tube, posterCard } from '../ui.js';
 import { tm, tmdbToken, nonLatin } from '../tmdb.js';
-import { item, metaOf } from '../store.js';
+import { item, metaOf, LS } from '../store.js';
 import { isAnimeResult, progress } from '../derive.js';
 import { emptyState } from './common.js';
 
-const st = { q: '', results: null, error: '', trending: null, trendingTried: false, seq: 0, en: new Map() };
+const st = { q: '', results: null, error: '', trending: null, trendingTried: false, seq: 0, en: new Map(), view: LS.get('vds.searchView', 'list') };
 let timer = null;
 
 const keep = (r) => (r.media_type === 'movie' || r.media_type === 'tv');
@@ -34,7 +34,6 @@ function resultRow(r) {
   const year = (r.release_date || r.first_air_date || '').slice(0, 4);
   const anime = isAnimeResult(r);
   const kind = type === 'tv' ? (anime ? 'Serie anime' : 'Serie') : (anime ? 'Film anime' : 'Film');
-  const overview = r.overview || st.en.get(key)?.overview || '';
   const poster = it?.poster || r.poster_path;
   return html`<a class="sr" href="#/t/${type}/${r.id}">
     <span class="sr-poster">
@@ -45,11 +44,28 @@ function resultRow(r) {
       <span class="sr-title">${title}</span>
       <span class="sr-meta">${kind}${year ? `, ${year}` : ''}</span>
       ${orig && orig !== title ? html`<span class="sr-orig">${orig}</span>` : ''}
-      ${overview ? html`<span class="sr-ov">${overview}</span>` : ''}
       ${it ? html`<span class="sr-st st-${it.status}"><i></i>${statusLabel(type, it.status)}</span>${tube(it.status, progress(it, metaOf(key)))}` : ''}
     </span>
   </a>`;
 }
+
+// Vista compatta: griglia di locandine con il titolo (tradotto, non l'originale) sotto.
+function gridCell(r) {
+  const type = r.media_type;
+  const key = keyOf(r);
+  const it = item(key);
+  const title = readableTitle(r);
+  return posterCard({
+    key, href: `#/t/${type}/${r.id}`, title, poster: it?.poster || r.poster_path,
+    kind: { type, anime: isAnimeResult(r) },
+    status: it?.status || null, progress: it ? progress(it, metaOf(key)) : 0,
+    extra: html`<span class="pc-title">${title}</span>`,
+  });
+}
+
+const resultsBlock = (list) => (st.view === 'grid'
+  ? html`<div class="grid">${list.map(gridCell)}</div>`
+  : html`<div class="sr-list">${list.map(resultRow)}</div>`);
 
 function resultsHtml() {
   if (!tmdbToken()) return emptyState('Manca la chiave TMDB', 'Inseriscila in Impostazioni per cercare serie e film.', html`<a class="btn primary" href="#/impostazioni">Apri Impostazioni</a>`);
@@ -57,10 +73,10 @@ function resultsHtml() {
   if (st.q.trim()) {
     if (!st.results) return html`<p class="muted pad">Cerco…</p>`;
     if (!st.results.length) return emptyState('Nessun risultato', `Niente per «${st.q.trim()}». Prova col titolo originale o in inglese.`);
-    return html`<div class="sr-list">${st.results.map(resultRow)}</div>`;
+    return resultsBlock(st.results);
   }
   if (!st.trending) return html`<p class="muted pad">Carico le tendenze…</p>`;
-  return html`<h2 class="section-title">Di tendenza questa settimana</h2><div class="sr-list">${st.trending.map(resultRow)}</div>`;
+  return html`<h2 class="section-title">Di tendenza questa settimana</h2>${resultsBlock(st.trending)}`;
 }
 
 function paint() {
@@ -99,13 +115,24 @@ async function runSearch() {
 export function renderSearch() {
   setTimeout(loadTrending, 0);
   return html`
-  <header class="page-top"><h1>Cerca</h1></header>
+  <header class="page-top">
+    <h1>Cerca</h1>
+    <button class="icon-btn push-right view-btn" data-act="search-view" aria-label="${st.view === 'grid' ? 'Mostra come elenco' : 'Mostra come griglia'}">${st.view === 'grid' ? icon.list : icon.library}</button>
+  </header>
   <div class="search-head">
     <label class="search-box big">${icon.search}<input type="search" data-input="search-q" placeholder="Serie, film, anime" value="${st.q}" autocomplete="off" autocorrect="off" enterkeyhint="search"></label>
   </div>
   <div id="search-results">${resultsHtml()}</div>
   <p class="tmdb-note">Dati e immagini da TMDB. Questa app usa l'API di TMDB ma non è approvata né certificata da TMDB.</p>`;
 }
+
+export const searchActions = {
+  'search-view': (el, { rerender }) => {
+    st.view = st.view === 'grid' ? 'list' : 'grid';
+    LS.set('vds.searchView', st.view);
+    rerender();
+  },
+};
 
 export const searchInputs = {
   'search-q': (el) => {

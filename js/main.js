@@ -3,7 +3,7 @@ import { S, subscribe, loadCache, pull, flush, refreshMeta, hasGhToken, saveMeta
 import * as A from './actions.js';
 import { renderHome, renderCollection } from './views/home.js';
 import { renderLibrary, libraryActions, libraryInputs } from './views/library.js';
-import { renderSearch, searchInputs } from './views/search.js';
+import { renderSearch, searchInputs, searchActions } from './views/search.js';
 import { renderUpcoming, upcomingActions } from './views/upcoming.js';
 import { renderDetail, detailActions } from './views/detail.js';
 import { renderLists, renderList, listActions, initReorder } from './views/lists.js';
@@ -98,7 +98,7 @@ const go = (hash) => { location.hash = hash; };
 const back = () => { if (navDepth > 0 && history.length > 1) { navDepth -= 2; history.back(); } else location.hash = '#/home'; };
 
 const ACTIONS = {
-  ...libraryActions, ...upcomingActions, ...detailActions, ...listActions, ...settingsActions,
+  ...libraryActions, ...searchActions, ...upcomingActions, ...detailActions, ...listActions, ...settingsActions,
   back: () => back(),
   'up-check': (el) => {
     const key = el.dataset.key; const s = Number(el.dataset.s); const e = Number(el.dataset.e);
