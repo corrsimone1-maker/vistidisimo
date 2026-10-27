@@ -1,6 +1,6 @@
 // Service worker: tiene una copia dell'app per aprirla anche offline. Prima prova la rete,
 // così gli aggiornamenti arrivano subito; le API (GitHub, TMDB) non passano da qui.
-const CACHE = 'vistidisimo-v11';
+const CACHE = 'vistidisimo-v12';
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => {
