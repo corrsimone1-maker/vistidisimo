@@ -88,5 +88,5 @@ export function renderCollection(name) {
     <button class="icon-btn back" data-act="back" aria-label="Indietro">${icon.back}</button>
     <h1>${c.title}</h1><span class="count">${list.length}</span>
   </header>
-  <div class="grid">${list.map((x) => cardFor(x.k))}</div>`;
+  <div class="grid">${list.map((x) => cardFor(x.k, { withTitle: true }))}</div>`;
 }

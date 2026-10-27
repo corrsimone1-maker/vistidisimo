@@ -108,7 +108,7 @@ export function renderList(id) {
     </div>
   </div>
   ${l.items.length
-    ? html`<div class="grid ${isEditing ? 'editing' : ''}" data-list="${l.id}">${l.items.map((e) => cardFor(e.key, { fallback: e, removable: isEditing }))}</div>`
+    ? html`<div class="grid ${isEditing ? 'editing' : ''}" data-list="${l.id}">${l.items.map((e) => cardFor(e.key, { fallback: e, removable: isEditing, withTitle: true }))}</div>`
     : emptyState('Lista vuota', 'Apri una serie o un film e tocca «Gestisci liste» per aggiungerlo qui.')}`;
 }
 

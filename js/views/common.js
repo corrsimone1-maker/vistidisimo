@@ -10,14 +10,17 @@ export const titleOf = (key, it, m) => {
 };
 
 // Locandina di un titolo della libreria (o di una lista).
-export function cardFor(key, { fallback, removable = false, extra } = {}) {
+// withTitle: titolo piccolo sotto la locandina (griglie della Libreria, «Tutte» e liste; non in Home).
+export function cardFor(key, { fallback, removable = false, extra, withTitle = false } = {}) {
   const it = item(key);
   const m = metaOf(key);
   const type = key.split(':')[0];
+  const title = titleOf(key, it, m) || fallback?.title || '';
+  if (withTitle) extra = html`${extra || ''}<span class="pc-title">${title}</span>`;
   return posterCard({
     key,
     href: `#/t/${key.replace(':', '/')}`,
-    title: titleOf(key, it, m) || fallback?.title || '',
+    title,
     poster: it?.poster || m?.p || null,
     kind: { type, anime: isAnime(it || {}, m) },
     status: it?.status || null,

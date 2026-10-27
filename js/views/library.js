@@ -33,7 +33,7 @@ function filtered() {
 function gridHtml() {
   const list = filtered();
   if (!list.length) return emptyState('Niente qui', F.q ? 'Nessun titolo corrisponde alla ricerca.' : 'Prova a cambiare i filtri.');
-  return html`<div class="grid">${list.map((x) => cardFor(x.k))}</div>`;
+  return html`<div class="grid">${list.map((x) => cardFor(x.k, { withTitle: true }))}</div>`;
 }
 
 export function renderLibrary() {
