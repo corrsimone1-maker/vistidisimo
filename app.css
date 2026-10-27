@@ -44,7 +44,14 @@
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-html { background: var(--notte); }
+/* Comportamento da app, non da sito: niente zoom (pizzico o doppio tocco), niente pagina che
+   scivola di lato o rimbalza, niente selezione del testo o menu della pressione lunga. */
+html {
+  background: var(--notte);
+  touch-action: pan-x pan-y;
+  overscroll-behavior: none;
+  overflow-x: hidden;
+}
 body {
   margin: 0;
   min-height: 100dvh;
@@ -56,8 +63,15 @@ body {
   font: 500 15px/1.45 var(--f-ui);
   -webkit-font-smoothing: antialiased;
   -webkit-text-size-adjust: 100%;
-  overscroll-behavior-y: none;
+  overscroll-behavior: none;
+  overflow-x: hidden;
+  touch-action: pan-x pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
+input, textarea { -webkit-user-select: text; user-select: text; }
+img { -webkit-user-drag: none; }
 #view {
   padding: calc(var(--safe-t) + 10px) 0 calc(var(--tab-h) + var(--safe-b) + 28px);
   max-width: 760px;

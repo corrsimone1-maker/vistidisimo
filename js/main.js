@@ -129,6 +129,10 @@ document.addEventListener('change', (ev) => {
   if (el) INPUTS[el.dataset.input]?.(el, ctx(ev));
 });
 
+// Niente zoom: iOS ignora in parte user-scalable=no, quindi si bloccano anche i gesti di pizzico.
+['gesturestart', 'gesturechange', 'gestureend'].forEach((t) => document.addEventListener(t, (e) => e.preventDefault(), { passive: false }));
+document.addEventListener('touchmove', (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+
 window.addEventListener('hashchange', onHash);
 initReorder();
 subscribe(scheduleRerender);

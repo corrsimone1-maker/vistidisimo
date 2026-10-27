@@ -52,6 +52,7 @@ Chiave `tipo:idTMDB` (`tv:48866`, `movie:129`). Stati: `planned` da guardare, `w
 - **Niente** community, reazioni, mood, recensioni social.
 - **Home** come il vecchio TV Time: statistiche in piccolo, ultime serie, ultimi film, serie preferite, film preferiti, liste. Ordine per ultima attività (`last`), nessun tasto per riordinare. Mettere voto o preferito non cambia `last`.
 - **Barra in basso**: Home (casetta), Libreria, Cerca, Prossimi.
+- **Deve sembrare un'app, non un sito**: niente zoom (viewport `maximum-scale=1, user-scalable=no`, `touch-action: pan-x pan-y`, gesti di pizzico bloccati in `main.js`), niente pagina che scivola di lato o rimbalza (`overscroll-behavior: none`, `overflow-x: hidden`), niente selezione del testo né menu della pressione lunga (tranne nei campi di testo). Nessun elemento deve uscire in larghezza dallo schermo.
 - **Libreria**: categorie Serie / Film / Anime (disgiunte, anime = serie+film anime), selezionabili singolarmente o tutte; filtro per stato; ordinamento.
 - **Cerca**: due viste con un tasto in alto (scelta ricordata in `vds.searchView`): elenco con titolo, tipo (Serie/Film, anime), anno, titolo originale e stato se è già in libreria (**niente trama**: troppe informazioni), oppure griglia compatta di locandine con il titolo tradotto sotto, piccolo. Simo deve distinguere serie, film e OVA con lo stesso nome. Se il titolo italiano di TMDB è in scrittura non latina (anime senza traduzione) si usa quello inglese (`nonLatin` in `tmdb.js`, ricerca fatta anche in `en-US`).
 - **Prossimi**: "Da vedere" (prossimo episodio delle serie in corso/in pari, più "Da iniziare") e "In uscita".
@@ -79,5 +80,6 @@ node prova-liste.js /percorso/screenshot                 # riordino delle liste 
 node prova-cerca.js /percorso/screenshot                 # ricerca: righe con titoli leggibili anche per gli anime
 node prova-avvio.js /percorso/screenshot                 # moduli tutti con ?v=N e schermata «Ripara e riapri» se un modulo è vecchio
 node prova-dati-veri.js /percorso/screenshot             # apre ogni schermata con library.json e meta.json veri
+node prova-app.js                                        # nessuna schermata più larga del telefono, viewport senza zoom
 ```
 Le due repo devono stare una accanto all'altra (le prove leggono `../vistidisimo-dati/library.json` senza modificarlo). `mock.js` simula l'API Contents di GitHub (con sha e 409), TMDB (dettagli, stagioni, ricerca, tendenze) e le immagini. Viewport 393×852 come l'iPhone di Simo; guarda sempre gli screenshot.
