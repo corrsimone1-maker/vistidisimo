@@ -118,7 +118,13 @@ function makeMocks(libPath, { animeKeys = new Set() } = {}) {
     else if (p === '/trending/all/week' || p === '/search/multi') {
       const q = (u.searchParams.get('query') || '').toLowerCase();
       const keys = Object.keys(lib.items).filter((k) => !q || lib.items[k].title.toLowerCase().includes(q)).slice(0, 9);
-      const results = keys.map((k) => { const [t, id] = k.split(':'); const it = lib.items[k]; return { media_type: t, id: Number(id), title: t === 'movie' ? it.title : undefined, name: t === 'tv' ? it.title : undefined, poster_path: `/p_${t}_${id}.jpg`, genre_ids: animeKeys.has(k) ? [16] : [18], original_language: animeKeys.has(k) ? 'ja' : 'en' }; });
+      const en = u.searchParams.get('language') === 'en-US';
+      const results = keys.map((k) => {
+        const [t, id] = k.split(':'); const it = lib.items[k]; const anime = animeKeys.has(k);
+        // come TMDB: senza traduzione italiana gli anime tornano col titolo giapponese
+        const name = anime && !en ? `アニメ ${it.title.slice(0, 6)}` : it.title;
+        return { media_type: t, id: Number(id), title: t === 'movie' ? name : undefined, name: t === 'tv' ? name : undefined, original_title: t === 'movie' ? `アニメ ${it.title.slice(0, 6)}` : undefined, original_name: t === 'tv' ? (anime ? `アニメ ${it.title.slice(0, 6)}` : it.title) : undefined, release_date: t === 'movie' ? `${it.year}-01-01` : undefined, first_air_date: t === 'tv' ? `${it.year}-01-01` : undefined, overview: en || !anime ? `Trama di ${it.title}.` : '', poster_path: `/p_${t}_${id}.jpg`, genre_ids: anime ? [16] : [18], original_language: anime ? 'ja' : 'en' };
+      });
       if (!q || q.startsWith('nuov')) results.push({ media_type: 'tv', id: 999001, name: 'Una serie nuova di zecca', poster_path: '/p_tv_999001.jpg', genre_ids: [18] }, { media_type: 'movie', id: 999002, title: 'Un film mai visto', poster_path: null, genre_ids: [16], original_language: 'ja' }, { media_type: 'person', id: 5, name: 'Persona' });
       body = { results: u.searchParams.get('page') === '2' ? [] : results };
     }

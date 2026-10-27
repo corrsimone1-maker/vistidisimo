@@ -16,7 +16,7 @@ async function load(type, id) {
   const key = `${type}:${id}`;
   if (!tmdbToken()) return;
   try {
-    const d = await fetchDetails(type, id);
+    const d = await fetchDetails(type, id, { overview: true });
     if (cur.key !== key) return;
     if (!d) { cur.err = 'TMDB non conosce questo titolo.'; repaint(); return; }
     cur.d = d;

@@ -1,0 +1,35 @@
+// Prova della ricerca: righe con titolo leggibile, tipo, anno, titolo originale, stato se in libreria.
+const { chromium } = require('playwright');
+const { spawn } = require('child_process');
+const path = require('path');
+const { makeMocks } = require('./mock.js');
+const ROOT = path.resolve(__dirname, '..', '..');
+const LIB = process.env.VDS_LIB || path.join(ROOT, 'vistidisimo-dati', 'library.json');
+const OUT = process.argv[2] || require('os').tmpdir();
+(async () => {
+  const srv = spawn('python3', ['-m', 'http.server', '8127', '--bind', '127.0.0.1', '--directory', ROOT], { stdio: 'ignore' });
+  await new Promise((r) => setTimeout(r, 800));
+  const lib0 = require(LIB);
+  const animeKeys = new Set(lib0.lists.find((l) => l.title === 'Anime')?.items.map((e) => e.key) || []);
+  const M = makeMocks(LIB, { animeKeys });
+  const browser = await chromium.launch();
+  const ctx = await browser.newContext({ viewport: { width: 393, height: 852 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  await ctx.route('https://api.github.com/**', M.github);
+  await ctx.route('https://api.themoviedb.org/**', M.tmdb);
+  await ctx.route('https://image.tmdb.org/**', M.image);
+  await ctx.addInitScript(() => { if (!localStorage.getItem('vds.ghToken')) { localStorage.setItem('vds.ghToken', 'x'); localStorage.setItem('vds.tmdbToken', 'y'); } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const base = 'http://127.0.0.1:8127/vistidisimo/';
+  await page.goto(base + '#/cerca');
+  await page.waitForSelector('.sr');
+  await page.screenshot({ path: path.join(OUT, '60-tendenze.png') });
+  await page.fill('[data-input=search-q]', 'sword');
+  await page.waitForTimeout(1200);
+  const rows = await page.$$eval('.sr', (els) => els.map((e) => [e.querySelector('.sr-title').textContent, e.querySelector('.sr-meta').textContent, e.querySelector('.sr-orig')?.textContent || ''].join(' | ')));
+  console.log(rows.join('\n'));
+  await page.screenshot({ path: path.join(OUT, '61-cerca-anime.png') });
+  console.log('ERRORI:', errors.length ? errors.join('\n') : 'nessuno');
+  await browser.close(); srv.kill();
+})().catch((e) => { console.error(e); process.exit(1); });

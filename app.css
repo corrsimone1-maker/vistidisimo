@@ -301,6 +301,21 @@ svg { width: 22px; height: 22px; flex: none; }
 .banner .tube { margin-top: 8px; }
 .banner.bad { display: flex; flex-direction: column; gap: 6px; background: rgba(255, 77, 106, .12); border: 1px solid rgba(255, 77, 106, .45); color: #ffc2cd; }
 .banner.bad b { color: #ff8299; font-size: 13px; }
+.sr-list { display: flex; flex-direction: column; gap: 4px; padding: 0 var(--gut); }
+.sr { display: grid; grid-template-columns: 70px 1fr; gap: 14px; padding: 10px 0; border-bottom: 1px solid rgba(201, 179, 255, .07); }
+.sr-poster { position: relative; width: 70px; aspect-ratio: 2 / 3; border-radius: 8px; overflow: hidden; background: var(--velluto-2); align-self: start; }
+.sr-poster img { width: 100%; height: 100%; object-fit: cover; }
+.sr-ph { position: absolute; inset: 0; background: linear-gradient(160deg, var(--velluto-2), var(--velluto)); }
+.sr-poster .kind { top: 4px; left: 4px; width: 17px; height: 17px; }
+.sr-poster .kind svg { width: 11px; height: 11px; }
+.sr-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sr-title { font: 650 15px/1.25 var(--f-disp); letter-spacing: -.02em; overflow-wrap: anywhere; }
+.sr-meta { font-size: 13px; font-weight: 700; color: var(--lilla); }
+.sr-orig { font-size: 12.5px; font-weight: 600; color: var(--testo-3); overflow-wrap: anywhere; }
+.sr-ov { margin-top: 3px; font-size: 13px; line-height: 1.4; color: var(--testo-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.sr-st { display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 12.5px; font-weight: 800; color: var(--testo); }
+.sr-st i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 6px var(--c); }
+.sr .tube { margin-top: 5px; max-width: 200px; }
 .tmdb-note { margin: 28px var(--gut) 0; font-size: 11.5px; color: var(--testo-3); text-align: center; line-height: 1.5; }
 
 /* ---------- prossimi ---------- */

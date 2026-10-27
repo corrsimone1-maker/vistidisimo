@@ -61,8 +61,22 @@ export function metaFromDetails(type, d) {
   };
 }
 
-export async function fetchDetails(type, id) {
-  return tm(`/${type}/${id}`);
+// Titoli in scrittura non latina (giapponese, coreano, cinese, cirillico…): succede quando TMDB
+// non ha la traduzione italiana e restituisce il titolo originale.
+const NON_LATIN = /[\u0400-\u04ff\u0590-\u06ff\u0e00-\u0e7f\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\uf900-\ufaff]/;
+export const nonLatin = (s) => !!s && NON_LATIN.test(s);
+
+// Dettagli in italiano; se il titolo non è leggibile (o manca la trama e serve) ripiega sull'inglese.
+export async function fetchDetails(type, id, { overview = false } = {}) {
+  const d = await tm(`/${type}/${id}`);
+  if (!d) return d;
+  const k = type === 'movie' ? 'title' : 'name';
+  if (nonLatin(d[k]) || (overview && !d.overview)) {
+    const en = await tm(`/${type}/${id}`, { language: 'en-US' }).catch(() => null);
+    if (en?.[k] && nonLatin(d[k]) && !nonLatin(en[k])) d[k] = en[k];
+    if (!d.overview && en?.overview) d.overview = en.overview;
+  }
+  return d;
 }
 
 export async function fetchSeason(id, n) {

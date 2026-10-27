@@ -1,8 +1,13 @@
 import { html, posterCard, icon } from '../ui.js';
+import { nonLatin } from '../tmdb.js';
 import { item, metaOf, S } from '../store.js';
 import { isAnime, progress, isAnimeResult } from '../derive.js';
 
-export const titleOf = (key, it, m) => m?.t || it?.title || '';
+export const titleOf = (key, it, m) => {
+  const t = m?.t;
+  if (t && !nonLatin(t)) return t;
+  return (it?.title && !nonLatin(it.title) ? it.title : '') || t || it?.title || '';
+};
 
 // Locandina di un titolo della libreria (o di una lista).
 export function cardFor(key, { fallback, removable = false, extra } = {}) {

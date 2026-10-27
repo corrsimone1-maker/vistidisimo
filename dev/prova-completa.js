@@ -59,7 +59,7 @@ const LIB = process.env.VDS_LIB || path.join(ROOT, 'vistidisimo-dati', 'library.
 
   // 3. cerca
   await page.click('#tabs a[data-tab=cerca]');
-  await page.waitForSelector('.grid');
+  await page.waitForSelector('.sr');
   await shot('07-cerca');
   await page.fill('[data-input=search-q]', 'nuov');
   await page.waitForTimeout(900);
