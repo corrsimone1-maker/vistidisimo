@@ -1,10 +1,11 @@
-import { html, raw, icon, img, fmtRating, fmtDay, today, statusLabel, openSheet, confirmSheet, promptSheet, toast, kindBadge, tube, esc } from '../ui.js';
+import { html, raw, icon, img, fmtRating, fmtDay, today, daysBetween, statusLabel, openSheet, confirmSheet, promptSheet, toast, kindBadge, tube, esc } from '../ui.js';
 import { item, metaOf, lib, putMeta, scheduleMetaSave } from '../store.js';
 import { fetchDetails, fetchImages, metaFromDetails, tmdbToken } from '../tmdb.js';
-import { isAnime, isAnimeResult, progress, isWatched, isAired, epRange, watchedCount, airedCount, nextEpisode } from '../derive.js';
+import { isAnime, isAnimeResult, progress, isWatched, isAired, epRange, watchedCount, airedCount, nextEpisode, rewatchOf, furthest, lastWatchDate } from '../derive.js';
 import * as A from '../actions.js';
 import { getSeason } from './upcoming.js';
-import { titleOf } from './common.js';
+import { titleOf, seenTitles } from './common.js';
+import { rewatchRow, agoText } from './episode.js';
 
 let cur = { key: null, d: null, err: '', open: new Set() };
 let repaint = () => {};
@@ -20,6 +21,7 @@ async function load(type, id) {
     if (cur.key !== key) return;
     if (!d) { cur.err = 'TMDB non conosce questo titolo.'; repaint(); return; }
     cur.d = d;
+    seenTitles.set(key, { title: d.title || d.name || '', year: Number((d.release_date || d.first_air_date || '').slice(0, 4)) || null });
     if (item(key) || metaOf(key)) { putMeta(key, metaFromDetails(type, d)); scheduleMetaSave(); }
     repaint();
   } catch (e) {
@@ -68,14 +70,19 @@ function seasonBlock(key, it, m, s) {
         const aired = loaded ? (e.air ? e.air <= today() : false) : isAired(m, s.n, e.n);
         const when = e.air ? (e.air <= today() ? fmtDay(e.air) : `Esce il ${fmtDay(e.air, { year: false })}`) : '';
         const seenOn = on ? it.eps[String(s.n)][String(e.n)] : '';
+        const rw = on ? rewatchOf(it, s.n, e.n) : 0;
         return html`<li class="ep ${on ? 'on' : ''} ${aired || on ? '' : 'future'}">
           <span class="ep-n">${e.n}</span>
-          <span class="ep-t">${e.name || `Episodio ${e.n}`}<small>${when}${seenOn ? html` <span class="seen">visto il ${fmtDay(seenOn)}</span>` : ''}</small></span>
+          <a class="ep-t" href="#/ep/${id}/${s.n}/${e.n}">${e.name || `Episodio ${e.n}`}<small>${when}${seenOn ? html` <span class="seen">visto il ${fmtDay(seenOn)}</span>` : (on ? html` <span class="seen">visto</span>` : '')}${rw ? html` · <span class="rw-tag">${rw + 1} volte</span>` : ''}</small></a>
           <button class="check-btn small ${on ? 'on' : ''}" data-act="d-ep" data-s="${s.n}" data-e="${e.n}" ${aired || on ? '' : 'disabled'} aria-label="${on ? 'Segna come non visto' : 'Segna come visto'}">${icon.check}</button>
         </li>`;
       })}
       ${!loaded && tmdbToken() ? html`<li class="ep muted">Carico gli episodi…</li>` : ''}
-    </ul>`;
+    </ul>
+    ${watched ? html`<div class="season-foot">
+      <a class="btn ghost small" href="#/ripasso/${id}/${s.n}">${icon.list}Ripassa</a>
+      <button class="btn ghost small" data-act="d-season-rw" data-s="${s.n}">${icon.replay}L’ho rivista</button>
+    </div>` : ''}`;
   }
   return html`<div class="season ${open ? 'open' : ''}">
     <div class="season-row">
@@ -89,6 +96,43 @@ function seasonBlock(key, it, m, s) {
     ${it ? tube(it.status, p) : ''}
     ${body}
   </div>`;
+}
+
+// «Dove eravamo rimasti»: dopo una pausa lunga (60 giorni) un riquadro in evidenza porta al ripasso
+// degli episodi visti; altrimenti basta un pulsante.
+const LONG_BREAK = 60;
+function resumeHtml(key, it, m) {
+  if (!it || it.type !== 'tv' || !watchedCount(it)) return '';
+  const id = key.split(':')[1];
+  const [fs, fe] = furthest(it);
+  const last = lastWatchDate(it);
+  const gap = last ? daysBetween(last, today()) : 0;
+  // solo per le serie che stai seguendo: su quelle finite da anni sarebbe rumore
+  if (gap >= LONG_BREAK && (it.status === 'watching' || it.status === 'uptodate')) {
+    const more = nextEpisode(it, m);
+    const ne = m?.ne && m.ne[2] && m.ne[2] >= today() ? m.ne : null;
+    const then = more ? `, poi riprendi da S${more.s} · E${more.e}` : (ne ? `: il prossimo esce il ${fmtDay(ne[2], { year: false })}` : '');
+    return html`<a class="resume" href="#/ripasso/${id}/${fs}">
+      <span class="resume-k">Dove eravamo rimasti</span>
+      <b>Ultimo visto S${fs} · E${fe}, ${agoText(last)}</b>
+      <small>Ripassa con immagini e trame gli episodi che hai visto${then}.</small>
+    </a>`;
+  }
+  return html`<a class="btn ghost wide d-rp" href="#/ripasso/${id}/${fs}">${icon.list}Ripassa gli episodi visti</a>`;
+}
+
+// Quante volte hai rivisto tutto il titolo, con − e +.
+function rewatchHtml(it) {
+  if (!it) return '';
+  const tv = it.type === 'tv';
+  if (tv ? !watchedCount(it) : it.status !== 'completed') return '';
+  const n = it.rewatch || 0;
+  const word = tv ? 'Rivista' : 'Rivisto';
+  return rewatchRow({
+    act: 'd-rw', n,
+    label: n ? `${word} ${n === 1 ? 'una volta' : `${n} volte`}` : `Mai ${word.toLowerCase()}`,
+    hint: tv ? (n ? `vista ${n + 1} volte per intero` : '+ quando la rivedi tutta; i singoli episodi dalla loro scheda') : (n ? `visto ${n + 1} volte` : '+ quando lo rivedi'),
+  });
 }
 
 // ---------- pagina ----------
@@ -128,7 +172,6 @@ export function renderDetail(type, id, rerender) {
     if (d?.release_date || m?.rd) facts.push(['Uscita', fmtDay(d?.release_date || m.rd)]);
     if (d?.runtime || m?.rt) facts.push(['Durata', runtimeText(d?.runtime || m.rt)]);
     if (it?.status === 'completed' && it.seen) facts.push(['Visto il', fmtDay(it.seen)]);
-    if (it?.rewatch) facts.push(['Rivisto', `${it.rewatch} ${it.rewatch === 1 ? 'volta' : 'volte'}`]);
     if (d?.status && d.status !== 'Released') facts.push(['Stato', MOVIE_STATUS[d.status] || d.status]);
   } else {
     const st = d?.status || m?.st;
@@ -175,7 +218,8 @@ export function renderDetail(type, id, rerender) {
       </button>` : ''}
     ${d?.overview ? html`<p class="overview">${d.overview}</p>` : (cur.err ? html`<p class="muted pad">${cur.err}</p>` : '')}
     ${facts.length ? html`<dl class="facts">${facts.map(([k, v]) => html`<div><dt>${k}</dt><dd>${v}</dd></div>`)}</dl>` : ''}
-    ${type === 'movie' && it?.status === 'completed' ? html`<button class="btn ghost wide" data-act="d-rewatch">${icon.replay}L’ho rivisto</button>` : ''}
+    ${resumeHtml(key, it, m)}
+    ${rewatchHtml(it)}
     ${seasonsHtml}
     <section class="d-sec">
       <h2>Liste</h2>
@@ -403,6 +447,13 @@ export const detailActions = {
   'd-more': () => moreSheet(),
   'd-fav': () => { A.toggleFav(cur.key, info()); },
   'd-add': (el) => { A.setStatus(cur.key, el.dataset.st, info()); toast(el.dataset.st === 'completed' ? 'Segnato come visto' : 'Aggiunto a da guardare'); },
-  'd-rewatch': () => A.rewatchMovie(cur.key),
+  'd-rw': (el) => {
+    const it = item(cur.key);
+    if (!it) return;
+    const n = (it.rewatch || 0) + Number(el.dataset.d);
+    A.setRewatch(cur.key, n);
+    if (it.type === 'tv' && Number(el.dataset.d) > 0) toast('Contata anche una visione in più per ogni episodio visto');
+  },
+  'd-season-rw': (el) => A.rewatchSeason(cur.key, Number(el.dataset.s)),
   'd-lists': () => listsSheet(cur.key, info()),
 };

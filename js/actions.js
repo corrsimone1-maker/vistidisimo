@@ -1,6 +1,6 @@
 // Azioni dell'utente: ognuna produce operazioni sulla libreria.
 import { dispatch, item, metaOf, ensureMeta } from './store.js';
-import { autoStatus, unwatchedBefore, unwatchedAired } from './derive.js';
+import { autoStatus, unwatchedBefore, unwatchedAired, rewatchOf, watchedList, isWatched } from './derive.js';
 import { today, toast, statusLabel } from './ui.js';
 
 const nowIso = () => new Date().toISOString();
@@ -72,11 +72,57 @@ export function setStatus(key, status, info) {
   }
 }
 
-export function rewatchMovie(key) {
+// ---- rivisioni ----
+// Valore assoluto per ogni episodio, così l'operazione si può riapplicare senza contare due volte.
+function rwOps(it, list, delta) {
+  return list.map(([s, e]) => [String(s), String(e), Math.max(0, rewatchOf(it, s, e) + delta)]);
+}
+
+// Quante volte hai rivisto per intero un titolo. Per una serie, ogni rivisione intera conta
+// anche come una visione in più di ogni episodio visto (e toglierla la toglie anche agli episodi).
+export function setRewatch(key, n) {
   const it = item(key);
   if (!it) return;
-  dispatch({ op: 'set', key, fields: { rewatch: (it.rewatch || 0) + 1, last: nowIso(), status: 'completed', seen: it.seen || today() }, msg: `Rivisto ${it.title}` });
-  toast(`Rivisto: ${(it.rewatch || 0) + 1} volte`);
+  const old = it.rewatch || 0;
+  const v = Math.max(0, Math.min(99, n));
+  if (v === old) return;
+  const fields = { rewatch: v };
+  if (v > old) fields.last = nowIso();
+  if (it.type === 'movie' && v > old) { fields.status = 'completed'; if (!it.seen) fields.seen = today(); }
+  const word = it.type === 'movie' ? 'Rivisto' : 'Rivista';
+  const ops = [{ op: 'set', key, fields, msg: v > old ? `${word} ${it.title} (${v + 1}ª volta)` : `${it.title}: rivisioni ${v}` }];
+  if (it.type === 'tv') {
+    // salta gli episodi che resterebbero a zero comunque
+    const set = rwOps(it, watchedList(it), v - old).filter(([s, e, n]) => n > 0 || rewatchOf(it, s, e) > 0);
+    if (set.length) ops.push({ op: 'rw', key, set });
+  }
+  dispatch(...ops);
+}
+
+// Visioni in più di un singolo episodio.
+export function setEpisodeRewatch(key, s, e, n) {
+  const it = item(key);
+  if (!it || !isWatched(it, s, e)) return;
+  const v = Math.max(0, Math.min(99, n));
+  const old = rewatchOf(it, s, e);
+  if (v === old) return;
+  const ops = [{ op: 'rw', key, set: [[String(s), String(e), v]], msg: `${it.title} ${epLabel(s, e)}: ${v ? `visto ${v + 1} volte` : 'mai rivisto'}` }];
+  if (v > old) ops.push({ op: 'set', key, fields: { last: nowIso() } });
+  dispatch(...ops);
+}
+
+// Hai rivisto una stagione intera: +1 a ogni episodio visto, con «Annulla».
+export function rewatchSeason(key, s) {
+  const it = item(key);
+  if (!it) return;
+  const list = watchedList(it, { specials: true, season: s });
+  if (!list.length) return;
+  const before = list.map(([a, b]) => [String(a), String(b), rewatchOf(it, a, b)]);
+  dispatch({ op: 'rw', key, set: rwOps(it, list, 1), msg: `Rivista ${it.title} ${s === 0 ? 'speciali' : `stagione ${s}`}` }, { op: 'set', key, fields: { last: nowIso() } });
+  toast(`${s === 0 ? 'Speciali' : `Stagione ${s}`}: +1 visione a ${list.length} episodi`, {
+    label: 'Annulla',
+    run: () => dispatch({ op: 'rw', key, set: before, msg: `Annulla rivisione di ${it.title}` }),
+  });
 }
 
 export function setRating(key, value) {

@@ -4,7 +4,7 @@ import { tm, tmdbToken } from '../tmdb.js';
 import { OWNER, DATA_REPO, serialize } from '../github.js';
 import { watchedCount, isAnime } from '../derive.js';
 
-export const VERSION = '13';
+export const VERSION = '14';
 let busy = false;
 let note = '';
 
@@ -43,13 +43,13 @@ function exportCsv() {
   const day = today();
   const head = ['Tipo', 'Anime', 'Titolo', 'Anno', 'Stato', 'Voto', 'Preferito', 'Episodi visti', 'Visto il', 'Rivisto', 'Aggiunto', 'Ultima attività', 'TMDB'];
   const rows = [head];
-  const eps = [['Serie', 'Stagione', 'Episodio', 'Visto il', 'TMDB']];
+  const eps = [['Serie', 'Stagione', 'Episodio', 'Visto il', 'Rivisto', 'TMDB']];
   for (const [k, it] of Object.entries(L.items)) {
     const m = metaOf(k);
     rows.push([it.type === 'tv' ? 'Serie' : 'Film', isAnime(it, m) ? 'sì' : '', m?.t || it.title, m?.y || it.year || '', statusLabel(it.type, it.status),
       it.rating == null ? '' : it.rating.toFixed(1).replace('.', ','), it.fav ? 'sì' : '', it.type === 'tv' ? watchedCount(it, { specials: true }) : '',
       it.seen || '', it.rewatch || '', (it.added || '').slice(0, 10), (it.last || '').slice(0, 10), `https://www.themoviedb.org/${it.type}/${it.id}`]);
-    for (const [s, list] of Object.entries(it.eps || {})) for (const [e, d] of Object.entries(list)) eps.push([m?.t || it.title, s, e, d, it.id]);
+    for (const [s, list] of Object.entries(it.eps || {})) for (const [e, d] of Object.entries(list)) eps.push([m?.t || it.title, s, e, d, it.rw?.[s]?.[e] || '', it.id]);
   }
   const toCsv = (rs) => '\ufeff' + rs.map((r) => r.map(csvCell).join(';')).join('\r\n') + '\r\n';
   download(`vistidisimo-titoli-${day}.csv`, toCsv(rows), 'text/csv');

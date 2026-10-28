@@ -155,6 +155,51 @@ export function unwatchedAired(it, m) {
   return out;
 }
 
+// ---- rivisioni ----
+// Quante volte in più (oltre la prima) è stato visto un episodio.
+export function rewatchOf(it, s, e) {
+  return it?.rw?.[String(s)]?.[String(e)] || 0;
+}
+
+// Totale delle visioni in più di tutti gli episodi di una serie.
+export function rewatchEpisodes(it) {
+  let n = 0;
+  for (const eps of Object.values(it?.rw || {})) for (const v of Object.values(eps)) n += v;
+  return n;
+}
+
+// Episodi visti, in ordine: [[stagione, episodio], ...]. Gli speciali solo se richiesti.
+export function watchedList(it, { specials = false, season = null } = {}) {
+  const out = [];
+  for (const [s, eps] of Object.entries(it?.eps || {})) {
+    const sn = Number(s);
+    if ((!specials && sn === 0) || (season != null && sn !== season)) continue;
+    for (const e of Object.keys(eps)) out.push([sn, Number(e)]);
+  }
+  return out.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+}
+
+// Data più recente in cui hai visto un episodio (le date mancanti degli import valgono come `last`).
+export function lastWatchDate(it) {
+  let best = '';
+  for (const eps of Object.values(it?.eps || {})) for (const d of Object.values(eps)) if (d && d > best) best = d;
+  return best || (it?.last || '').slice(0, 10);
+}
+
+// Episodio precedente e successivo nell'ordine delle stagioni (gli speciali restano tra gli speciali).
+export function neighbors(m, s, e) {
+  const list = [];
+  if (s === 0) {
+    const sp = (m?.ss || []).find((x) => x[0] === 0);
+    for (let i = 1; i <= (sp?.[1] || 0); i++) list.push([0, i]);
+  } else {
+    for (const [sn] of seasons(m)) { const [first, last] = epRange(m, sn); for (let en = first; en <= last; en++) list.push([sn, en]); }
+  }
+  const i = list.findIndex(([a, b]) => a === s && b === e);
+  if (i === -1) return { prev: null, next: null };
+  return { prev: list[i - 1] || null, next: list[i + 1] || null };
+}
+
 // ---- statistiche ----
 export function stats(items, metaOf) {
   let epCount = 0; let tvMin = 0; let films = 0; let filmMin = 0;
@@ -164,7 +209,8 @@ export function stats(items, metaOf) {
       const w = watchedCount(it, { specials: true });
       epCount += w;
       const rt = m?.rt || (isAnime(it, m) ? 24 : 42);
-      tvMin += w * rt;
+      // il tempo conta anche le rivisioni degli episodi; il numero di episodi no
+      tvMin += (w + rewatchEpisodes(it)) * rt;
     } else if (it.status === 'completed') {
       films += 1;
       filmMin += (m?.rt || 110) * (1 + (it.rewatch || 0));

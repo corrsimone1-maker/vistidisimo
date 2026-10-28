@@ -91,12 +91,71 @@ export async function fetchImages(type, id) {
   return { posters: pick(d?.posters), backdrops: pick(d?.backdrops) };
 }
 
-export async function fetchSeason(id, n) {
-  const d = await tm(`/tv/${id}/season/${n}`);
+// Una stagione con i suoi episodi. language: 'it-IT' (predefinita), 'en-US' o 'es-ES' per le trame mancanti.
+export async function fetchSeason(id, n, language) {
+  const d = await tm(`/tv/${id}/season/${n}`, language ? { language } : {});
   if (!d) return null;
   return {
     name: d.name,
-    eps: (d.episodes || []).map((e) => ({ n: e.episode_number, name: e.name, air: e.air_date || null, still: e.still_path || null, rt: e.runtime || null })),
+    eps: (d.episodes || []).map((e) => ({ n: e.episode_number, name: e.name, air: e.air_date || null, still: e.still_path || null, rt: e.runtime || null, ov: (e.overview || '').trim() })),
+  };
+}
+
+// Lingue delle trame, in ordine di preferenza: italiano, poi inglese, poi spagnolo. Le altre no.
+export const PLOT_LANGS = [
+  { l: 'it', regions: ['IT'], label: 'italiano' },
+  { l: 'en', regions: ['US', 'GB'], label: 'inglese' },
+  { l: 'es', regions: ['ES', 'MX'], label: 'spagnolo' },
+];
+
+// Sceglie titolo e trama tra le traduzioni di TMDB: { name, ov, lang } (lang: 'it'|'en'|'es'|null).
+// Titoli segnaposto che TMDB mette quando manca quello vero ("Episodio 5", "Episode 5", "Episodio 5" in spagnolo).
+export const genericName = (s) => /^\s*(episodio|episode|episódio|capitolo|cap[ií]tulo)\s*\d+\s*$/i.test(s || '');
+
+export function pickPlot(translations) {
+  const list = [].concat(translations || []);
+  const best = (l, regions, field) => {
+    const cand = list.filter((t) => t.iso_639_1 === l && (t.data?.[field] || '').trim() && !(field === 'name' && genericName(t.data.name)));
+    cand.sort((a, b) => {
+      const ia = regions.indexOf(a.iso_3166_1); const ib = regions.indexOf(b.iso_3166_1);
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    });
+    return cand[0]?.data?.[field]?.trim() || '';
+  };
+  let ov = ''; let lang = null; let name = '';
+  for (const { l, regions } of PLOT_LANGS) {
+    if (!ov) { const t = best(l, regions, 'overview'); if (t) { ov = t; lang = l; } }
+    if (!name) name = best(l, regions, 'name');
+  }
+  return { name, ov, lang };
+}
+
+// Tutto quello che TMDB sa di un episodio: titolo e trama (it → en → es), regia, sceneggiatura,
+// e tutti i fotogrammi (stills) in ogni lingua, ordinati per voto.
+export async function fetchEpisode(id, s, e) {
+  const base = `/tv/${id}/season/${s}/episode/${e}`;
+  const [d, im] = await Promise.all([
+    tm(base, { append_to_response: 'translations' }),
+    tm(`${base}/images`, { language: null }).catch(() => null),
+  ]);
+  if (!d) return null;
+  const tr = [...(d.translations?.translations || (Array.isArray(d.translations) ? d.translations : []))];
+  // la versione italiana arriva anche nei campi principali (la richiesta è in it-IT)
+  if ((d.overview || '').trim() || (d.name || '').trim()) tr.unshift({ iso_639_1: 'it', iso_3166_1: 'IT', data: { name: d.name || '', overview: d.overview || '' } });
+  const plot = pickPlot(tr);
+  const crew = d.crew || [];
+  const names = (jobs) => [...new Set(crew.filter((c) => jobs.includes(c.job)).map((c) => c.name))];
+  const stills = (im?.stills || [])
+    .map((x) => ({ p: x.file_path, v: x.vote_average || 0, n: x.vote_count || 0, w: x.width || 0 }))
+    .sort((a, b) => b.v - a.v || b.n - a.n || b.w - a.w)
+    .map((x) => x.p);
+  if (d.still_path && !stills.includes(d.still_path)) stills.unshift(d.still_path);
+  else if (d.still_path) { stills.splice(stills.indexOf(d.still_path), 1); stills.unshift(d.still_path); }
+  return {
+    name: plot.name || d.name || '', ov: plot.ov, lang: plot.lang,
+    air: d.air_date || null, rt: d.runtime || null,
+    directors: names(['Director']), writers: names(['Writer', 'Screenplay', 'Teleplay', 'Story']),
+    stills,
   };
 }
 

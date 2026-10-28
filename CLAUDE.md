@@ -21,14 +21,14 @@ HTML/CSS/JS statici, moduli ES senza build né dipendenze. Niente framework.
 | `js/derive.js` | avanzamento, stato automatico, prossimo episodio, anime, statistiche, % liste |
 | `js/actions.js` | azioni utente → operazioni |
 | `js/ui.js` | template `html` con escape, icone SVG, locandina (`posterCard`), fogli dal basso, avvisi, date |
-| `js/views/*.js` | schermate: `home`, `library`, `search`, `upcoming` (Prossimi), `detail`, `lists`, `settings` |
+| `js/views/*.js` | schermate: `home`, `library`, `search`, `upcoming` (Prossimi), `detail`, `episode` (scheda episodio e Ripasso), `lists`, `settings` |
 | `sw.js` | service worker: rete prima, cache solo come ripiego offline |
 | `dev/` | prove con Playwright e API finte (vedi sotto). Non fa parte dell'app |
 
-Rotte: `#/home`, `#/raccolta/<serie|film|serie-preferite|film-preferiti>`, `#/libreria`, `#/cerca`, `#/prossimi`, `#/t/<tv|movie>/<id>`, `#/liste`, `#/lista/<id>`, `#/impostazioni`.
+Rotte: `#/home`, `#/raccolta/<serie|film|serie-preferite|film-preferiti>`, `#/libreria`, `#/cerca`, `#/prossimi`, `#/t/<tv|movie>/<id>`, `#/ep/<idSerie>/<stagione>/<episodio>`, `#/ripasso/<idSerie>[/<stagione>]`, `#/liste`, `#/lista/<id>`, `#/impostazioni`. La pagina del titolo e il Ripasso tengono lo scroll quando ci torni da un episodio (`CHILD_OF` in `main.js`).
 
 ### Sincronizzazione (non romperla)
-- Ogni azione è un'**operazione** (`add`, `set`, `del`, `eps`, `lnew`, `lset`, `ldel`, `ladd`, `lrem`, `lorder`) messa in coda in `localStorage` (`vds.ops`). La libreria mostrata = ultima versione scaricata (`vds.base`) + operazioni in coda.
+- Ogni azione è un'**operazione** (`add`, `set`, `del`, `eps`, `rw`, `lnew`, `lset`, `ldel`, `ladd`, `lrem`, `lorder`) messa in coda in `localStorage` (`vds.ops`). La libreria mostrata = ultima versione scaricata (`vds.base`) + operazioni in coda.
 - `flush()` parte 1,5 s dopo l'ultima azione, quando l'app va in background e al ritorno online. Riapplica le operazioni sull'ultima versione di GitHub; se lo sha non torna (409/422), riscarica e riprova. Così due dispositivi non si sovrascrivono.
 - Ogni salvataggio è un commit su `library.json` con un messaggio leggibile (`op.msg`).
 - Token scaduto o sbagliato (401/403): la coda resta sul dispositivo, in Home compare un avviso rosso, e incollando un token nuovo in Impostazioni la coda parte da sola.
@@ -41,6 +41,12 @@ Rotte: `#/home`, `#/raccolta/<serie|film|serie-preferite|film-preferiti>`, `#/li
 
 ## Modello dati (riassunto)
 Chiave `tipo:idTMDB` (`tv:48866`, `movie:129`). Stati: `planned` da guardare, `watching` in corso, `uptodate` in pari, `completed` completata/visto, `dropped` abbandonata. Non esiste "in pausa": Simo l'ha tolto. Episodi: `eps[stagione][episodio] = "YYYY-MM-DD"` (o `""`), stagione `0` = speciali. Formato completo nel README della repo dati.
+
+**Rivisioni** (28/10/2026):
+- `rewatch` = quante volte hai rivisto **per intero** il titolo (film o serie). Si cambia con − / + nella pagina del titolo. Per una serie, ±1 sposta di ±1 anche ogni episodio visto (`setRewatch` in `actions.js`).
+- `rw[stagione][episodio] = n` = visioni **in più** di un singolo episodio (visto n+1 volte); solo valori > 0. Si cambia dalla scheda episodio o con «L’ho rivista» in fondo a una stagione aperta (+1 a tutti i suoi episodi visti, con «Annulla»). L'operazione `rw` scrive valori assoluti, quindi si può riapplicare. Togliere un episodio dai visti toglie anche le sue rivisioni (con conferma se ne aveva).
+- I 336 episodi rivisti sono stati recuperati dal `rewatchCount` del backup Refract (l'import iniziale aveva preso solo quello per titolo).
+- Il tempo in Home conta anche le rivisioni (episodi: `rw`; film: `rewatch`); il numero di episodi/film visti no.
 
 `meta.json` (cache TMDB, chiavi corte): `t` titolo, `ot` originale, `y` anno, `p` locandina, `b` sfondo, `g` generi, `l` lingua, `c` paesi, `rt` durata, `st` stato TMDB, `ss` stagioni `[n, episodi, data]`, `le` ultimo uscito `[s, e, data]`, `ne` prossimo `[s, e, data, nome]`, `rd` uscita film, `at` timestamp. Si aggiorna da solo: serie in corso ogni 12 h, finite ogni 30 giorni, film ogni 60.
 
@@ -56,6 +62,9 @@ Chiave `tipo:idTMDB` (`tv:48866`, `movie:129`). Stati: `planned` da guardare, `w
 - **Titoli sotto le locandine**: piccoli, su massimo due righe, nelle griglie (Libreria, pagine «Tutte», liste, Cerca in vista griglia). **Non** nelle righe della Home.
 - **Libreria**: categorie Serie / Film / Anime (disgiunte, anime = serie+film anime), selezionabili singolarmente o tutte; filtro per stato; ordinamento.
 - **Cerca**: due viste con un tasto in alto (scelta ricordata in `vds.searchView`): elenco con titolo, tipo (Serie/Film, anime), anno, titolo originale e stato se è già in libreria (**niente trama**: troppe informazioni), oppure griglia compatta di locandine con il titolo tradotto sotto, piccolo. Simo deve distinguere serie, film e OVA con lo stesso nome. Se il titolo italiano di TMDB è in scrittura non latina (anime senza traduzione) si usa quello inglese (`nonLatin` in `tmdb.js`, ricerca fatta anche in `en-US`).
+- **Scheda episodio** (`#/ep/…`, si apre toccando il titolo di un episodio): fotogramma grande, titolo, uscita, durata, visto il, rivisioni, trama, regia e sceneggiatura, tutti i fotogrammi di TMDB (`/episode/…/images` senza `language`) con visore a tutto schermo, episodio precedente/successivo. **Trame solo in italiano, poi inglese, poi spagnolo** (le lingue che Simo legge; `pickPlot` in `tmdb.js`, dalle `translations` dell'episodio); se sono in inglese o spagnolo lo si dice sotto. I titoli segnaposto «Episodio N» di TMDB si sostituiscono con quello vero in inglese se c'è. **Niente modelli né AI per riassumere**: Simo non vuole pagare e non vuole spoiler. Episodi non visti: trama e immagini velate finché non tocchi (solo per la sessione).
+- **Ripasso** (`#/ripasso/…`): tutti gli episodi **visti** di una stagione in ordine, con fotogramma grande e trama (stessa regola delle lingue: si chiede la stagione in `en-US`/`es-ES` solo se mancano trame), per ricordarsi la storia prima di riprendere. Nella pagina della serie, se è in corso/in pari e l'ultimo episodio visto è di più di 60 giorni fa, compare il riquadro «Dove eravamo rimasti»; altrimenti un pulsante «Ripassa gli episodi visti». C'è anche «Ripassa» in fondo a ogni stagione aperta.
+- Fotogrammi grandi con `w780` (non è tra le misure dei fotogrammi su TMDB ma di solito funziona) e ripiego automatico su `original` se non carica.
 - **Prossimi**: "Da vedere" (prossimo episodio delle serie in corso/in pari, più "Da iniziare") e "In uscita".
 - **Liste**: % completata = media dell'avanzamento dei titoli dentro, mostrata **piccola e discreta** (percentuale rosa e barra sottile a gradiente: Simo le voleva meno ingombranti); riordinabili trascinando (pagina Liste → Riordina), l'ordine vale anche in Home.
 - **Copertina e banner**: si cambiano dal menu ⋯ in alto nella pagina del titolo («Cambia copertina» / «Cambia banner»), solo per i titoli in libreria. Il foglio mostra tutte le immagini di TMDB (`/images` senza `language`) divise per lingua (Italiano, Inglese, Senza testo, Giapponese, poi le altre), ordinate per voto, più «Torna a quella predefinita». Si salvano in `poster` / `backdrop` dell'item. I **loghi** di TMDB non si usano (l'app scrive il titolo).
@@ -84,5 +93,6 @@ node prova-avvio.js /percorso/screenshot                 # moduli tutti con ?v=N
 node prova-dati-veri.js /percorso/screenshot             # apre ogni schermata con library.json e meta.json veri
 node prova-app.js                                        # nessuna schermata più larga del telefono, viewport senza zoom
 node prova-copertine.js /percorso/screenshot             # cambia copertina e banner dal menu ⋯, salvataggio e ripristino
+node prova-episodi.js /percorso/screenshot               # scheda episodio (lingue, fotogrammi, visore, velo), ripasso, rivisioni di titoli/stagioni/episodi
 ```
-Le due repo devono stare una accanto all'altra (le prove leggono `../vistidisimo-dati/library.json` senza modificarlo). `mock.js` simula l'API Contents di GitHub (con sha e 409), TMDB (dettagli, stagioni, ricerca, tendenze) e le immagini. Viewport 393×852 come l'iPhone di Simo; guarda sempre gli screenshot.
+Playwright è installato globalmente: lancia le prove con `NODE_PATH=$(npm root -g) node …`. Se una prova si interrompe può lasciare acceso il suo `python3 -m http.server`: spegnilo (`pkill -f "[h]ttp\.server 81"`) prima di rilanciare, se no la prova successiva sulla stessa porta usa il server vecchio. Le due repo devono stare una accanto all'altra (le prove leggono `../vistidisimo-dati/library.json` senza modificarlo). `mock.js` simula l'API Contents di GitHub (con sha e 409), TMDB (dettagli, stagioni, ricerca, tendenze) e le immagini. Viewport 393×852 come l'iPhone di Simo; guarda sempre gli screenshot.

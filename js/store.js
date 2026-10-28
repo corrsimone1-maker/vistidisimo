@@ -62,6 +62,8 @@ function applyOp(doc, op) {
       }
       for (const [s, e] of op.rm || []) {
         if (it.eps[s]) { delete it.eps[s][e]; if (!Object.keys(it.eps[s]).length) delete it.eps[s]; }
+        // un episodio tolto dai visti non può restare "rivisto"
+        if (it.rw?.[s]) { delete it.rw[s][e]; if (!Object.keys(it.rw[s]).length) delete it.rw[s]; if (!Object.keys(it.rw).length) delete it.rw; }
       }
       // ordine stabile di stagioni ed episodi
       const sorted = {};
@@ -70,6 +72,25 @@ function applyOp(doc, op) {
         for (const e of Object.keys(it.eps[s]).sort((a, b) => a - b)) sorted[s][e] = it.eps[s][e];
       }
       it.eps = sorted;
+      break;
+    }
+    case 'rw': {
+      // rivisioni dei singoli episodi: valori assoluti (volte in più oltre la prima), 0 = mai rivisto.
+      // Riapplicarla due volte dà lo stesso risultato.
+      if (!it) break;
+      for (const [s, e, n] of op.set || []) {
+        if (n > 0) { if (it.eps?.[s] && e in it.eps[s]) ((it.rw ||= {})[s] ||= {})[e] = n; } else if (it.rw?.[s]) delete it.rw[s][e];
+        if (it.rw?.[s] && !Object.keys(it.rw[s]).length) delete it.rw[s];
+      }
+      if (it.rw) {
+        const sorted = {};
+        for (const s of Object.keys(it.rw).sort((a, b) => a - b)) {
+          sorted[s] = {};
+          for (const e of Object.keys(it.rw[s]).sort((a, b) => a - b)) sorted[s][e] = it.rw[s][e];
+        }
+        it.rw = sorted;
+        if (!Object.keys(it.rw).length) delete it.rw;
+      }
       break;
     }
     case 'lnew':

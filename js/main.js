@@ -6,6 +6,7 @@ import { renderLibrary, libraryActions, libraryInputs } from './views/library.js
 import { renderSearch, searchInputs, searchActions } from './views/search.js';
 import { renderUpcoming, upcomingActions } from './views/upcoming.js';
 import { renderDetail, detailActions } from './views/detail.js';
+import { renderEpisode, renderRipasso, episodeActions } from './views/episode.js';
 import { renderLists, renderList, listActions, initReorder } from './views/lists.js';
 import { renderSettings, settingsActions } from './views/settings.js';
 
@@ -34,6 +35,8 @@ function renderRoute() {
     case 'cerca': out = renderSearch(); break;
     case 'prossimi': out = renderUpcoming(rerender); break;
     case 't': out = renderDetail(r.parts[1] === 'movie' ? 'movie' : 'tv', Number(r.parts[2]), rerender); break;
+    case 'ep': out = renderEpisode(Number(r.parts[1]), Number(r.parts[2]), Number(r.parts[3]), rerender); break;
+    case 'ripasso': out = renderRipasso(Number(r.parts[1]), r.parts[2] == null ? null : Number(r.parts[2]), rerender); break;
     case 'liste': out = renderLists(); break;
     case 'lista': out = renderList(decodeURIComponent(r.parts[1] || '')); break;
     case 'impostazioni': out = renderSettings(); break;
@@ -41,7 +44,7 @@ function renderRoute() {
   }
   view.innerHTML = String(out);
   view.dataset.route = r.name;
-  const tab = r.name === 't' ? lastTab : (TAB_OF[r.name] || 'home');
+  const tab = (r.name === 't' || r.name === 'ep' || r.name === 'ripasso') ? lastTab : (TAB_OF[r.name] || 'home');
   lastTab = tab;
   document.querySelectorAll('#tabs a').forEach((a) => {
     const on = a.dataset.tab === tab;
@@ -78,17 +81,23 @@ function scheduleRerender() {
   rerenderTimer = setTimeout(() => { lastRerender = Date.now(); rerender(); }, wait);
 }
 
+// Scheda di un titolo e ripasso tengono lo scroll solo quando ci torni da una loro sotto-pagina
+// (un episodio), non quando li riapri da capo.
+const CHILD_OF = { t: new Set(['ep', 'ripasso']), ripasso: new Set(['ep']) };
+
 function onHash() {
   scrollMem.set(currentHash, window.scrollY);
   const hs = {};
   view.querySelectorAll('[data-scroll]').forEach((el) => { hs[el.dataset.scroll] = el.scrollLeft; });
   scrollMem.set(currentHash + '|h', hs);
+  const from = parse(currentHash).name;
   currentHash = location.hash;
   navDepth += 1;
   closeAllSheets();
   renderRoute();
   const r = parse(location.hash);
-  const y = KEEP_SCROLL.has(r.name) ? scrollMem.get(currentHash) || 0 : 0;
+  const keep = KEEP_SCROLL.has(r.name) || CHILD_OF[r.name]?.has(from);
+  const y = keep ? scrollMem.get(currentHash) || 0 : 0;
   const savedH = scrollMem.get(currentHash + '|h') || {};
   view.querySelectorAll('[data-scroll]').forEach((el) => { if (savedH[el.dataset.scroll] != null) el.scrollLeft = savedH[el.dataset.scroll]; });
   window.scrollTo(0, y);
@@ -98,7 +107,7 @@ const go = (hash) => { location.hash = hash; };
 const back = () => { if (navDepth > 0 && history.length > 1) { navDepth -= 2; history.back(); } else location.hash = '#/home'; };
 
 const ACTIONS = {
-  ...libraryActions, ...searchActions, ...upcomingActions, ...detailActions, ...listActions, ...settingsActions,
+  ...libraryActions, ...searchActions, ...upcomingActions, ...detailActions, ...episodeActions, ...listActions, ...settingsActions,
   back: () => back(),
   'up-check': (el) => {
     const key = el.dataset.key; const s = Number(el.dataset.s); const e = Number(el.dataset.e);

@@ -98,7 +98,7 @@ const LIB = process.env.VDS_LIB || path.join(ROOT, 'vistidisimo-dati', 'library.
   await page.click('[data-act=d-rate]');
   await page.waitForSelector('.rate-big');
   await page.waitForTimeout(300);
-  await page.click('[data-d="1"]'); await page.click('[data-d="1"]'); await page.click('[data-d="1"]');
+  await page.click('.rate-ctl [data-d="1"]'); await page.click('.rate-ctl [data-d="1"]'); await page.click('.rate-ctl [data-d="1"]');
   await shot('15-voto');
   await page.click('[data-ok]');
   await page.waitForTimeout(500);

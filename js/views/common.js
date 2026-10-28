@@ -3,6 +3,10 @@ import { nonLatin } from '../tmdb.js';
 import { item, metaOf, S } from '../store.js';
 import { isAnime, progress, isAnimeResult } from '../derive.js';
 
+// Titolo e anno dei titoli aperti in questa sessione (anche quelli non in libreria): servono alla
+// scheda episodio di una serie che non hai ancora aggiunto.
+export const seenTitles = new Map(); // key -> { title, year }
+
 export const titleOf = (key, it, m) => {
   const t = m?.t;
   if (t && !nonLatin(t)) return t;
