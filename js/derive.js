@@ -227,6 +227,22 @@ export function splitTime(min) {
   return { months, days, hours };
 }
 
+// Quando l'hai visto, per ordinare le liste: film = data di visione (o dell'ultima rivisione,
+// che aggiorna `last`), serie = ultimo episodio visto. '' = non ancora visto.
+export function watchDate(it) {
+  if (!it) return '';
+  if (it.type === 'movie') return it.status === 'completed' ? [it.seen || '', (it.last || '').slice(0, 10)].sort().pop() : '';
+  return watchedCount(it, { specials: true }) ? lastWatchDate(it) : '';
+}
+
+// Titoli di una lista dal visto più di recente; quelli non visti in fondo, nell'ordine della lista.
+export function listOrder(list, items) {
+  return list.items
+    .map((e, i) => ({ e, i, d: watchDate(items[e.key]) }))
+    .sort((a, b) => (b.d || '').localeCompare(a.d || '') || a.i - b.i)
+    .map((x) => x.e);
+}
+
 // Percentuale completata di una lista: media dell'avanzamento dei titoli dentro.
 export function listProgress(list, items, metaOf) {
   if (!list.items.length) return 0;

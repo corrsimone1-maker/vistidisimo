@@ -1,6 +1,6 @@
 import { html, icon, img } from '../ui.js';
 import { lib, metaOf, S } from '../store.js';
-import { stats, splitTime, listProgress, byLast } from '../derive.js';
+import { stats, splitTime, listProgress, listOrder, byLast } from '../derive.js';
 import { cardFor, syncDot, metaBanner, syncBanner } from './common.js';
 
 function timeValue(min) {
@@ -26,7 +26,7 @@ function row(id, title, list, href, allLabel, emptyText) {
 
 export function listCard(l, items) {
   const p = listProgress(l, items, metaOf);
-  const covers = l.items.slice(0, 4).map((e) => items[e.key]?.poster || metaOf(e.key)?.p).filter(Boolean);
+  const covers = listOrder(l, items).slice(0, 4).map((e) => items[e.key]?.poster || metaOf(e.key)?.p).filter(Boolean);
   return html`<a class="lc" href="#/lista/${encodeURIComponent(l.id)}">
     <div class="lc-mosaic n${covers.length}">${covers.map((p2) => html`<img loading="lazy" src="${img(p2, 'w185')}" alt="">`)}</div>
     <div class="lc-name">${l.title}</div>

@@ -1,6 +1,6 @@
 import { html, icon, img, confirmSheet, promptSheet, toast } from '../ui.js';
 import { lib, metaOf } from '../store.js';
-import { listProgress } from '../derive.js';
+import { listProgress, listOrder } from '../derive.js';
 import * as A from '../actions.js';
 import { cardFor, emptyState } from './common.js';
 import { listCard } from './home.js';
@@ -108,7 +108,7 @@ export function renderList(id) {
     </div>
   </div>
   ${l.items.length
-    ? html`<div class="grid ${isEditing ? 'editing' : ''}" data-list="${l.id}">${l.items.map((e) => cardFor(e.key, { fallback: e, removable: isEditing, withTitle: true }))}</div>`
+    ? html`<div class="grid ${isEditing ? 'editing' : ''}" data-list="${l.id}">${listOrder(l, lib().items).map((e) => cardFor(e.key, { fallback: e, removable: isEditing, withTitle: true }))}</div>`
     : emptyState('Lista vuota', 'Apri una serie o un film e tocca «Gestisci liste» per aggiungerlo qui.')}`;
 }
 

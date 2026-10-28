@@ -50,6 +50,36 @@ const LIB = process.env.VDS_LIB || path.join(ROOT, 'vistidisimo-dati', 'library.
   await page.waitForTimeout(600);
   const home = await page.$$eval('.scroller.lists .lc-name', (e) => e.map((x) => x.textContent.slice(0, 18)));
   console.log('in Home :', home.join(' | '));
+  // ordine dentro le liste: dal visto più di recente, i non visti in fondo nell'ordine della lista
+  const lib1 = JSON.parse(M.files['library.json']);
+  const when = (it) => {
+    if (!it) return '';
+    if (it.type === 'movie') return it.status === 'completed' ? [it.seen || '', (it.last || '').slice(0, 10)].sort().pop() : '';
+    const ds = Object.values(it.eps || {}).flatMap((x) => Object.values(x));
+    if (!ds.length) return '';
+    return ds.filter(Boolean).sort().pop() || (it.last || '').slice(0, 10);
+  };
+  for (const l of lib1.lists) {
+    await page.goto(base + '#/lista/' + encodeURIComponent(l.id));
+    await page.waitForSelector('.list-head');
+    await page.waitForTimeout(300);
+    const keys = await page.$$eval('.grid .pc', (e) => e.map((x) => x.dataset.key));
+    const dates = keys.map((k) => when(lib1.items[k]));
+    const seen = dates.filter(Boolean);
+    const sorted = seen.every((d, i) => i === 0 || seen[i - 1] >= d);
+    const firstEmpty = dates.indexOf('');
+    const unseenAtEnd = firstEmpty === -1 || dates.slice(firstEmpty).every((d) => !d);
+    const unseenKeys = keys.filter((k, i) => !dates[i]);
+    const listOrderUnseen = l.items.map((e) => e.key).filter((k) => unseenKeys.includes(k));
+    const ok = keys.length === l.items.length && sorted && unseenAtEnd && unseenKeys.join() === listOrderUnseen.join();
+    console.log(`lista «${l.title.slice(0, 18)}»: ${keys.length} titoli, ${seen.length} visti dal più recente (${seen[0] || '-'} … ${seen[seen.length - 1] || '-'}), ${unseenKeys.length} non visti in fondo: ${ok ? 'ok' : 'NO'}`);
+    if (!ok) errors.push('ordine sbagliato nella lista ' + l.title);
+    if (l.title === 'Anime') await page.screenshot({ path: path.join(OUT, '52-lista-ordinata.png') });
+  }
+  await page.goto(base + '#/home');
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: path.join(OUT, '53-home-liste.png') });
   console.log('ERRORI:', errors.length ? errors.join('\n') : 'nessuno');
   await browser.close(); srv.kill();
+  process.exit(errors.length ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });
