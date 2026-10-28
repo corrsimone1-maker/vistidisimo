@@ -1,9 +1,9 @@
 // Scheda di un episodio (trama più completa che TMDB ha, regia, tutti i fotogrammi) e «Ripasso»
 // (tutti gli episodi visti di una stagione, con immagine e trama, per ricordarsi dove eravamo rimasti).
 // Le trame: italiano, se manca inglese, se manca spagnolo; altre lingue no.
-import { html, raw, icon, img, fmtDay, today, daysBetween, confirmSheet, closeAllSheets } from '../ui.js';
+import { html, raw, icon, img, fmtDay, today, daysBetween, openSheet, toast, closeAllSheets } from '../ui.js';
 import { item, metaOf } from '../store.js';
-import { fetchEpisode, fetchSeason, tmdbToken, genericName, PLOT_LANGS } from '../tmdb.js';
+import { fetchEpisode, fetchSeason, tmdbToken, genericName } from '../tmdb.js';
 import { isWatched, isAired, rewatchOf, neighbors, watchedList, lastWatchDate, furthest, nextEpisode } from '../derive.js';
 import * as A from '../actions.js';
 import { getSeason } from './upcoming.js';
@@ -15,7 +15,6 @@ const langCache = new Map(); // "id:s:lang" -> stagione | 'loading' | null
 const revealed = new Set(); // episodi non visti di cui hai chiesto di vedere trama e immagini (solo per questa sessione)
 let cur = null; // { id, s, e } della scheda aperta
 
-const LANG_LABEL = Object.fromEntries(PLOT_LANGS.map((x) => [x.l, x.label]));
 
 function getEpisode(id, s, e) {
   const k = `${id}:${s}:${e}`;
@@ -41,9 +40,8 @@ function getSeasonIn(id, s, language) {
   return v && v !== 'loading' ? v : null;
 }
 
-const fmtTimes = (n) => (n === 1 ? 'una volta' : `${n} volte`);
 const epName = (name, s, e) => (name && !genericName(name) ? name : (s === 0 ? `Speciale ${e}` : `Episodio ${e}`));
-const code = (s, e) => (s === 0 ? `Speciale ${e}` : `S${s} · E${e}`);
+export const code = (s, e) => (s === 0 ? `Speciale ${e}` : `S${s} · E${e}`);
 
 export function agoText(day) {
   if (!day) return '';
@@ -53,20 +51,38 @@ export function agoText(day) {
   if (n < 30) return `${n} giorni fa`;
   const mo = Math.round(n / 30.44);
   if (mo < 12) return mo === 1 ? 'un mese fa' : `${mo} mesi fa`;
-  const y = Math.floor(n / 365.25);
-  const rest = Math.round((n - y * 365.25) / 30.44);
+  const y = Math.floor(mo / 12);
+  const rest = mo % 12;
   const ys = y === 1 ? 'un anno' : `${y} anni`;
   return rest >= 3 && y < 3 ? `${ys} e ${rest === 1 ? 'un mese' : `${rest} mesi`} fa` : `${ys} fa`;
 }
 
-// Riga «rivisto» con − e +: per un titolo intero (detail.js) o per un episodio (qui).
-export function rewatchRow({ act, n, label, hint }) {
-  return html`<div class="rw-box ${n ? 'has' : ''}">
-    <span class="rw-ic">${icon.replay}</span>
-    <span class="rw-l"><b>${label}</b><small>${hint}</small></span>
-    <button class="icon-btn round rw-btn" data-act="${act}" data-d="-1" ${n ? '' : 'disabled'} aria-label="Una volta in meno">−</button>
-    <button class="icon-btn round rw-btn" data-act="${act}" data-d="1" aria-label="Una volta in più">+</button>
-  </div>`;
+// Cerchio di spunta su un episodio già visto: rivisto, togli una rivisione, oppure non visto.
+export function watchedEpisodeSheet(key, s, e) {
+  const it = item(key);
+  if (!isWatched(it, s, e)) return;
+  const rw = rewatchOf(it, s, e);
+  const seenOn = it.eps[String(s)][String(e)];
+  openSheet(String(html`
+    <h3 class="sheet-title">${code(s, e)}</h3>
+    <p class="sheet-text">${seenOn ? `Visto il ${fmtDay(seenOn)}` : 'Visto'}${rw ? ` · ${rw + 1} volte` : ''}</p>
+    <div class="opt-list">
+      <button class="opt act-opt" data-o="rw">${icon.replay}L’ho rivisto</button>
+      ${rw ? html`<button class="opt act-opt" data-o="rw-1">${icon.minus}Togli una rivisione</button>` : ''}
+      <button class="opt act-opt bad" data-o="off">${icon.x}Segna come non visto</button>
+    </div>`), {
+    onMount: (el, close) => {
+      el.querySelectorAll('[data-o]').forEach((b) => {
+        b.onclick = () => {
+          close();
+          const o = b.dataset.o;
+          if (o === 'rw') { A.setEpisodeRewatch(key, s, e, rw + 1); toast(`${code(s, e)}: visto ${rw + 2} volte`); }
+          if (o === 'rw-1') A.setEpisodeRewatch(key, s, e, rw - 1);
+          if (o === 'off') A.unmarkEpisodes(key, [[s, e]]);
+        };
+      });
+    },
+  });
 }
 
 // Fotogramma grande e nitido. TMDB elenca per i fotogrammi solo w92/w185/w300/original: w780 è una
@@ -100,7 +116,6 @@ export function renderEpisode(id, s, e, rerender) {
   const hidden = !watched && !revealed.has(ek);
   const stills = data?.stills?.length ? data.stills : (se?.still ? [se.still] : []);
   const ov = data ? data.ov : (se?.ov || '');
-  const lang = data ? data.lang : (se?.ov ? 'it' : null);
   const seenOn = watched ? it.eps[String(s)][String(e)] : '';
   const rw = rewatchOf(it, s, e);
   const { prev, next } = neighbors(m, s, e);
@@ -111,10 +126,10 @@ export function renderEpisode(id, s, e, rerender) {
   if (data?.writers?.length) facts.push(['Sceneggiatura', data.writers.join(', ')]);
 
   let plot;
-  if (hidden) plot = html`<p class="muted">Nascosta finché non lo vedi, per non rovinarti niente.</p>`;
-  else if (ov) plot = html`<div class="epd-ov">${paragraphs(ov)}</div>${lang && lang !== 'it' ? html`<p class="epd-lang">Trama in ${LANG_LABEL[lang]}: su TMDB manca quella italiana.</p>` : ''}`;
+  if (hidden) plot = html`<button class="btn ghost small" data-act="ep-reveal">${icon.eye}Mostra trama e immagini</button>`;
+  else if (ov) plot = html`<div class="epd-ov">${paragraphs(ov)}</div>`;
   else if (loading || (!data && !err)) plot = html`<p class="muted">Carico la trama…</p>`;
-  else plot = html`<p class="muted">${err || 'TMDB non ha una trama in italiano, inglese o spagnolo per questo episodio.'}</p>`;
+  else plot = html`<p class="muted">${err || 'Trama non disponibile.'}</p>`;
 
   return html`
   <div class="epd">
@@ -123,9 +138,7 @@ export function renderEpisode(id, s, e, rerender) {
         ? html`<img src="${img(stills[0], 'w300')}" alt="">`
         : html`<button class="epd-hero-btn" data-act="ep-view" data-i="0" aria-label="Apri l’immagine">${bigImg(stills[0])}</button>`)
         : html`<div class="epd-ph">${icon.tv}</div>`}
-      ${hidden && (stills.length || ov || data) ? html`<button class="veil" data-act="ep-reveal">
-        <b>Non l’hai ancora visto</b><small>Tocca per vedere trama e immagini</small>
-      </button>` : ''}
+      ${hidden && (stills.length || ov || data) ? html`<button class="veil" data-act="ep-reveal" aria-label="Mostra trama e immagini">${icon.eye}<b>Mostra</b></button>` : ''}
     </div>
     <div class="hero-bar">
       <button class="icon-btn glass" data-act="back" aria-label="Indietro">${icon.back}</button>
@@ -137,10 +150,9 @@ export function renderEpisode(id, s, e, rerender) {
       <p class="epd-meta">${air ? (aired ? `Uscito il ${fmtDay(air)}` : `Esce il ${fmtDay(air)}`) : ''}${air && rt ? ' · ' : ''}${rt ? `${rt} min` : ''}</p>
     </div>
     <div class="epd-seen-row">
-      <button class="check-btn ${it ? `st-${it.status}` : ''} ${watched ? 'on' : ''}" data-act="ep-check" ${aired || watched ? '' : 'disabled'} aria-label="${watched ? 'Segna come non visto' : 'Segna come visto'}">${icon.check}</button>
-      <span class="epd-seen">${watched ? html`<b>Visto</b>${seenOn ? html`<small>il ${fmtDay(seenOn)}</small>` : ''}` : html`<b>${aired ? 'Da vedere' : 'Non ancora uscito'}</b>`}</span>
+      <button class="check-btn ${it ? `st-${it.status}` : ''} ${watched ? 'on' : ''}" data-act="ep-check" ${aired || watched ? '' : 'disabled'} aria-label="${watched ? 'Rivisto o non visto' : 'Segna come visto'}">${icon.check}</button>
+      <span class="epd-seen">${watched ? html`<b>${rw ? `Visto ${rw + 1} volte` : 'Visto'}</b>${seenOn ? html`<small>${rw ? 'la prima volta ' : ''}il ${fmtDay(seenOn)}</small>` : ''}` : html`<b>${aired ? 'Da vedere' : 'Non ancora uscito'}</b>`}</span>
     </div>
-    ${watched ? rewatchRow({ act: 'ep-rw', n: rw, label: rw ? `Visto ${rw + 1} volte` : 'Visto una volta', hint: rw ? `rivisto ${fmtTimes(rw)}` : '+ se lo rivedi' }) : ''}
     <section class="d-sec epd-plot"><h2>Trama</h2>${plot}</section>
     ${facts.length ? html`<dl class="facts">${facts.map(([k, v]) => html`<div><dt>${k}</dt><dd>${v}</dd></div>`)}</dl>` : ''}
     ${!hidden && stills.length ? html`<section class="d-sec">
@@ -186,15 +198,12 @@ function stillsOf(id, s, e) {
   return se?.still ? [se.still] : [];
 }
 
-async function toggleWatched() {
+function toggleWatched() {
   const { id, s, e } = cur;
   const key = `tv:${id}`;
   const it = item(key);
-  if (isWatched(it, s, e)) {
-    const rw = rewatchOf(it, s, e);
-    if (rw && !(await confirmSheet('Segnarlo come non visto?', `Perdi anche le ${rw + 1} visioni contate.`, 'Togli', { danger: true }))) return;
-    A.unmarkEpisodes(key, [[s, e]]);
-  } else {
+  if (isWatched(it, s, e)) watchedEpisodeSheet(key, s, e);
+  else {
     const m = metaOf(key);
     const seen = seenTitles.get(key);
     A.markEpisodes(key, [[s, e]], { type: 'tv', id, title: titleOf(key, it, m) || seen?.title || '', year: m?.y ?? seen?.year ?? null }, { offerPrevious: true });
@@ -212,7 +221,7 @@ export function renderRipasso(id, sParam, rerender) {
     <button class="icon-btn back" data-act="back" aria-label="Indietro">${icon.back}</button>
     <h1>Ripasso</h1>
   </header>`;
-  if (!all.length) return html`${head}${emptyState('Niente da ripassare', 'Qui trovi gli episodi che hai già visto, con immagini e trama.')}`;
+  if (!all.length) return html`${head}${emptyState('Nessun episodio visto')}`;
   const seasonsSeen = [...new Set(all.map(([s]) => s))].sort((a, b) => (a === 0) - (b === 0) || a - b);
   const [fs, fe] = furthest(it);
   const s = seasonsSeen.includes(sParam) ? sParam : (fs || seasonsSeen[0]);
@@ -233,8 +242,7 @@ export function renderRipasso(id, sParam, rerender) {
   const card = ([, e]) => {
     const a = itMap.get(e); const b = enMap.get(e); const c = esMap.get(e);
     const name = [a?.name, b?.name, c?.name].find((x) => x && !genericName(x)) || '';
-    let ov = ''; let lang = null;
-    for (const [x, l] of [[a, 'it'], [b, 'en'], [c, 'es']]) if (!ov && x?.ov) { ov = x.ov; lang = l; }
+    const ov = a?.ov || b?.ov || c?.ov || '';
     const still = a?.still || b?.still || c?.still;
     const seen = it.eps[String(s)][String(e)];
     const rw = rewatchOf(it, s, e);
@@ -242,8 +250,8 @@ export function renderRipasso(id, sParam, rerender) {
       <div class="rp-still">${still ? bigImg(still, { lazy: true }) : html`<span>${icon.tv}</span>`}<span class="rp-n">${s === 0 ? 'SP' : ''}${e}</span></div>
       <div class="rp-body">
         <b class="rp-name">${epName(name, s, e)}</b>
-        <small>${seen ? `visto il ${fmtDay(seen)}` : 'visto'}${rw ? ` · ${rw + 1} volte` : ''}${lang && lang !== 'it' ? html` · <span class="rp-lang">trama in ${LANG_LABEL[lang]}</span>` : ''}</small>
-        ${ov ? html`<div class="rp-ov">${paragraphs(ov)}</div>` : html`<p class="rp-ov muted">${stillLoading ? 'Carico la trama…' : 'Nessuna trama in italiano, inglese o spagnolo.'}</p>`}
+        <small>${seen ? `visto il ${fmtDay(seen)}` : 'visto'}${rw ? ` · ${rw + 1} volte` : ''}</small>
+        ${ov ? html`<div class="rp-ov">${paragraphs(ov)}</div>` : html`<p class="rp-ov muted">${stillLoading ? 'Carico la trama…' : 'Trama non disponibile.'}</p>`}
       </div>
     </a>`;
   };
@@ -251,7 +259,7 @@ export function renderRipasso(id, sParam, rerender) {
   return html`
   ${head}
   <a class="rp-show" href="#/t/tv/${id}">${show}</a>
-  <p class="rp-intro">Solo gli episodi che hai visto, in ordine: niente spoiler. ${fs ? html`Ultimo visto <b>${code(fs, fe)}</b>${last ? `, ${agoText(last)}` : ''}.` : ''}</p>
+  ${fs ? html`<p class="rp-intro">Ultimo visto <b>${code(fs, fe)}</b>${last ? `, ${agoText(last)}` : ''}</p>` : ''}
   ${seasonsSeen.length > 1 ? html`<div class="chips scroll-x rp-seasons" data-scroll="rp-seasons">
     ${seasonsSeen.map((x) => html`<a class="chip ${x === s ? 'on' : ''}" href="#/ripasso/${id}/${x}">${x === 0 ? 'Speciali' : `Stagione ${x}`} <span>${all.filter(([y]) => y === x).length}</span></a>`)}
   </div>` : ''}
@@ -262,11 +270,6 @@ export function renderRipasso(id, sParam, rerender) {
 
 export const episodeActions = {
   'ep-check': () => toggleWatched(),
-  'ep-rw': (el) => {
-    const { id, s, e } = cur;
-    const key = `tv:${id}`;
-    A.setEpisodeRewatch(key, s, e, rewatchOf(item(key), s, e) + Number(el.dataset.d));
-  },
   'rp-end': () => {
     const cards = document.querySelectorAll('.rp-card');
     const lastCard = cards[cards.length - 1];

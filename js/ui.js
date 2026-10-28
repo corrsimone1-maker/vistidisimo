@@ -38,6 +38,8 @@ export const icon = {
   image: svg('<rect x="3.2" y="4.2" width="17.6" height="15.6" rx="2.4"/><circle cx="9" cy="9.6" r="1.7"/><path d="m4 17.6 5.2-4.8 3.6 3.2 2.6-2.2 4.6 4"/>'),
   grip: svg('<path d="M5 8.5h14M5 12h14M5 15.5h14"/>', 'stroke-width="2"'),
   replay: svg('<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.2 4.2v4h4"/>'),
+  minus: svg('<path d="M5 12h14"/>', 'stroke-width="2.2"'),
+  eye: svg('<path d="M2.8 12s3.4-6.2 9.2-6.2 9.2 6.2 9.2 6.2-3.4 6.2-9.2 6.2S2.8 12 2.8 12z"/><circle cx="12" cy="12" r="2.8"/>'),
 };
 
 export const IMG = 'https://image.tmdb.org/t/p/';

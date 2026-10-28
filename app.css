@@ -530,21 +530,24 @@ body.no-tabs #toast-root { bottom: calc(var(--safe-b) + 16px); }
 .art-check svg { width: 15px; height: 15px; }
 
 /* ---------- rivisioni ---------- */
-.rw-box {
-  display: flex; align-items: center; gap: 10px; margin: 14px var(--gut) 0;
-  padding: 10px 10px 10px 12px; border-radius: 14px; background: var(--velluto);
+.d-status-row { display: flex; align-items: center; gap: 10px; }
+.rw-chip {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 38px; min-width: 38px; padding: 0 10px; border-radius: 19px;
+  background: var(--velluto); border: 1px solid rgba(201, 179, 255, .14); color: var(--testo-3);
 }
-.rw-ic { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--velluto-2); color: var(--testo-3); flex: none; }
-.rw-ic svg { width: 18px; height: 18px; }
-.rw-box.has .rw-ic { color: var(--blu); box-shadow: 0 0 12px rgba(76, 201, 255, .35); }
-.rw-l { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.rw-l b { font-weight: 800; font-size: 14.5px; }
-.rw-l small { font-weight: 600; font-size: 12px; color: var(--testo-3); line-height: 1.3; }
-.rw-btn { width: 38px; height: 38px; }
+.rw-chip svg { width: 18px; height: 18px; }
+.rw-chip b { font: 700 14px var(--f-disp); }
+.rw-chip.has { padding: 0 13px 0 11px; color: var(--blu); border-color: rgba(76, 201, 255, .45); box-shadow: 0 0 12px rgba(76, 201, 255, .18); }
+.rw-step { display: grid; grid-template-columns: 52px 1fr 52px; align-items: center; margin: 2px 0 6px; text-align: center; }
+.rw-step .icon-btn { width: 52px; height: 52px; }
+.rw-step-n { display: block; font: 700 60px/1 var(--f-disp); letter-spacing: -.05em; color: #fff; text-shadow: 0 0 8px rgba(76, 201, 255, .9), 0 0 26px rgba(76, 201, 255, .45); font-variant-numeric: tabular-nums; }
+.rw-step-sub { display: block; margin-top: 6px; font-size: 13px; font-weight: 700; color: var(--testo-3); }
 .rw-tag { color: var(--blu); font-weight: 800; }
-.season-foot { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 4px 2px 0; }
-.season-foot .btn { padding: 0 8px; }
-.season-foot .btn svg { width: 16px; height: 16px; }
+.act-opt svg { margin-left: 0; width: 20px; height: 20px; color: var(--lilla); }
+.act-opt.bad { color: #ff8299; }
+.act-opt.bad svg { color: #ff8299; }
+.season-rp { margin: 10px 0 2px; }
+.season-rp svg { width: 16px; height: 16px; }
 
 /* ---------- dove eravamo rimasti ---------- */
 .resume {
@@ -563,9 +566,9 @@ body.no-tabs #toast-root { bottom: calc(var(--safe-b) + 16px); }
 .epd-hero::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(18, 13, 31, .4) 0%, rgba(18, 13, 31, 0) 30%, rgba(18, 13, 31, 0) 62%, var(--notte) 100%); }
 .epd-hero-btn { display: block; width: 100%; height: 100%; }
 .epd-hero.veiled img { filter: blur(24px) brightness(.55) saturate(1.2); }
-.veil { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 0 30px; text-align: center; }
-.veil b { font: 650 16px var(--f-disp); letter-spacing: -.02em; }
-.veil small { color: var(--testo-2); font-weight: 700; font-size: 13px; }
+.veil { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--testo); }
+.veil svg { width: 30px; height: 30px; filter: drop-shadow(0 0 8px rgba(201, 179, 255, .7)); }
+.veil b { font: 650 14px var(--f-disp); letter-spacing: -.01em; }
 .epd-ph { display: grid; place-items: center; height: 100%; color: var(--testo-3); }
 .epd-ph svg { width: 44px; height: 44px; opacity: .5; }
 .epd-head { position: relative; z-index: 1; padding: 0 var(--gut); margin-top: -26px; }
@@ -578,7 +581,6 @@ body.no-tabs #toast-root { bottom: calc(var(--safe-b) + 16px); }
 .epd-seen b { font-weight: 800; font-size: 15px; }
 .epd-seen small { font-weight: 600; font-size: 12.5px; color: var(--testo-3); }
 .epd-ov p { margin: 0 0 10px; color: #e2daf6; font-size: 15.5px; line-height: 1.62; max-width: 68ch; }
-.epd-lang { margin: 2px 0 0; font-size: 12.5px; font-weight: 600; color: var(--testo-3); }
 .epd-plot .muted { margin: 0; font-size: 14px; }
 .d-sec h2 .count { color: var(--testo-3); font: 600 13px var(--f-disp); margin-left: 4px; }
 .stills { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -607,7 +609,7 @@ body.no-tabs #toast-root { bottom: calc(var(--safe-b) + 16px); }
 .rp-show { display: block; margin: -8px var(--gut) 0; font-weight: 800; font-size: 14px; color: var(--lilla); }
 .rp-intro { margin: 6px var(--gut) 14px; color: var(--testo-2); font-size: 13.5px; font-weight: 600; }
 .rp-intro b { color: var(--testo); }
-.rp-seasons { margin-bottom: 14px; }
+.chips.scroll-x.rp-seasons { margin: 0 0 14px; }
 .rp-jump { margin: 0 var(--gut) 14px; }
 .rp-jump svg { width: 16px; height: 16px; }
 .rp-list { display: flex; flex-direction: column; gap: 14px; padding: 0 var(--gut); }
@@ -618,7 +620,6 @@ body.no-tabs #toast-root { bottom: calc(var(--safe-b) + 16px); }
 .rp-body { padding: 12px 14px 14px; }
 .rp-name { display: block; font: 650 15px/1.3 var(--f-disp); letter-spacing: -.02em; }
 .rp-body small { display: block; margin-top: 3px; color: var(--testo-3); font-size: 12px; font-weight: 700; }
-.rp-lang { color: var(--blu); }
 .rp-ov p { margin: 8px 0 0; color: #ddd4f2; font-size: 14.5px; line-height: 1.56; }
 p.rp-ov { margin: 8px 0 0; font-size: 13.5px; }
 .rp-next { width: calc(100% - 2 * var(--gut)) !important; margin: 18px var(--gut) 0 !important; }

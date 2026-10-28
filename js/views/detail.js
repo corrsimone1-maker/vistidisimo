@@ -5,7 +5,7 @@ import { isAnime, isAnimeResult, progress, isWatched, isAired, epRange, watchedC
 import * as A from '../actions.js';
 import { getSeason } from './upcoming.js';
 import { titleOf, seenTitles } from './common.js';
-import { rewatchRow, agoText } from './episode.js';
+import { agoText, watchedEpisodeSheet } from './episode.js';
 
 let cur = { key: null, d: null, err: '', open: new Set() };
 let repaint = () => {};
@@ -74,15 +74,12 @@ function seasonBlock(key, it, m, s) {
         return html`<li class="ep ${on ? 'on' : ''} ${aired || on ? '' : 'future'}">
           <span class="ep-n">${e.n}</span>
           <a class="ep-t" href="#/ep/${id}/${s.n}/${e.n}">${e.name || `Episodio ${e.n}`}<small>${when}${seenOn ? html` <span class="seen">visto il ${fmtDay(seenOn)}</span>` : (on ? html` <span class="seen">visto</span>` : '')}${rw ? html` · <span class="rw-tag">${rw + 1} volte</span>` : ''}</small></a>
-          <button class="check-btn small ${on ? 'on' : ''}" data-act="d-ep" data-s="${s.n}" data-e="${e.n}" ${aired || on ? '' : 'disabled'} aria-label="${on ? 'Segna come non visto' : 'Segna come visto'}">${icon.check}</button>
+          <button class="check-btn small ${on ? 'on' : ''}" data-act="d-ep" data-s="${s.n}" data-e="${e.n}" ${aired || on ? '' : 'disabled'} aria-label="${on ? 'Rivisto o non visto' : 'Segna come visto'}">${icon.check}</button>
         </li>`;
       })}
       ${!loaded && tmdbToken() ? html`<li class="ep muted">Carico gli episodi…</li>` : ''}
     </ul>
-    ${watched ? html`<div class="season-foot">
-      <a class="btn ghost small" href="#/ripasso/${id}/${s.n}">${icon.list}Ripassa</a>
-      <button class="btn ghost small" data-act="d-season-rw" data-s="${s.n}">${icon.replay}L’ho rivista</button>
-    </div>` : ''}`;
+    ${watched ? html`<a class="btn ghost small season-rp" href="#/ripasso/${id}/${s.n}">${icon.list}Ripassa</a>` : ''}`;
   }
   return html`<div class="season ${open ? 'open' : ''}">
     <div class="season-row">
@@ -91,7 +88,7 @@ function seasonBlock(key, it, m, s) {
         <span class="s-count">${watched}/${s.count}</span>
         <span class="chev">${icon.chevron}</span>
       </button>
-      <button class="check-btn small ${allDone ? 'on' : ''}" data-act="d-season-all" data-s="${s.n}" aria-label="${allDone ? 'Togli la stagione' : 'Segna tutta la stagione'}">${icon.check}</button>
+      <button class="check-btn small ${allDone ? 'on' : ''}" data-act="d-season-all" data-s="${s.n}" aria-label="${allDone ? 'Rivista o non vista' : 'Segna tutta la stagione'}">${icon.check}</button>
     </div>
     ${it ? tube(it.status, p) : ''}
     ${body}
@@ -111,27 +108,47 @@ function resumeHtml(key, it, m) {
   if (gap >= LONG_BREAK && (it.status === 'watching' || it.status === 'uptodate')) {
     const more = nextEpisode(it, m);
     const ne = m?.ne && m.ne[2] && m.ne[2] >= today() ? m.ne : null;
-    const then = more ? `, poi riprendi da S${more.s} · E${more.e}` : (ne ? `: il prossimo esce il ${fmtDay(ne[2], { year: false })}` : '');
+    const then = more ? `Poi riprendi da S${more.s} · E${more.e}` : (ne ? `Il prossimo esce il ${fmtDay(ne[2], { year: false })}` : '');
     return html`<a class="resume" href="#/ripasso/${id}/${fs}">
       <span class="resume-k">Dove eravamo rimasti</span>
       <b>Ultimo visto S${fs} · E${fe}, ${agoText(last)}</b>
-      <small>Ripassa con immagini e trame gli episodi che hai visto${then}.</small>
+      ${then ? html`<small>${then}</small>` : ''}
     </a>`;
   }
   return html`<a class="btn ghost wide d-rp" href="#/ripasso/${id}/${fs}">${icon.list}Ripassa gli episodi visti</a>`;
 }
 
-// Quante volte hai rivisto tutto il titolo, con − e +.
-function rewatchHtml(it) {
-  if (!it) return '';
-  const tv = it.type === 'tv';
-  if (tv ? !watchedCount(it) : it.status !== 'completed') return '';
+// Quante volte hai rivisto tutto il titolo: un piccolo bottone accanto allo stato, con il numero.
+const canRewatch = (it) => !!it && (it.type === 'tv' ? watchedCount(it) > 0 : it.status === 'completed');
+function rewatchChip(it) {
+  if (!canRewatch(it)) return '';
   const n = it.rewatch || 0;
-  const word = tv ? 'Rivista' : 'Rivisto';
-  return rewatchRow({
-    act: 'd-rw', n,
-    label: n ? `${word} ${n === 1 ? 'una volta' : `${n} volte`}` : `Mai ${word.toLowerCase()}`,
-    hint: tv ? (n ? `vista ${n + 1} volte per intero` : '+ quando la rivedi tutta; i singoli episodi dalla loro scheda') : (n ? `visto ${n + 1} volte` : '+ quando lo rivedi'),
+  return html`<button class="rw-chip ${n ? 'has' : ''}" data-act="d-rw" aria-label="${it.type === 'tv' ? 'Rivista tutta' : 'Rivisto'}: ${n}">${icon.replay}${n ? html`<b>${n}</b>` : ''}</button>`;
+}
+
+function rewatchSheet() {
+  const key = cur.key; const it = item(key);
+  if (!canRewatch(it)) return;
+  const tv = it.type === 'tv';
+  const paint = (el) => {
+    const n = item(key).rewatch || 0;
+    el.querySelector('.rw-step-n').textContent = n;
+    el.querySelector('.rw-step-sub').textContent = n ? `${tv ? 'vista' : 'visto'} ${n + 1} volte` : (tv ? 'mai rivista' : 'mai rivisto');
+    el.querySelector('[data-rw="-1"]').disabled = !n;
+  };
+  openSheet(String(html`
+    <h3 class="sheet-title">${tv ? 'Rivista tutta' : 'Rivisto'}</h3>
+    <div class="rw-step">
+      <button class="icon-btn round" data-rw="-1" aria-label="Una volta in meno">${icon.minus}</button>
+      <div><span class="rw-step-n">0</span><span class="rw-step-sub"></span></div>
+      <button class="icon-btn round" data-rw="1" aria-label="Una volta in più">${icon.plus}</button>
+    </div>
+    <button class="btn primary wide" data-close>Fatto</button>`), {
+    className: 'rw-sheet',
+    onMount: (el) => {
+      paint(el);
+      el.querySelectorAll('[data-rw]').forEach((b) => { b.onclick = () => { A.setRewatch(key, (item(key).rewatch || 0) + Number(b.dataset.rw)); paint(el); }; });
+    },
   });
 }
 
@@ -212,14 +229,13 @@ export function renderDetail(type, id, rerender) {
         <div class="d-chips">${chips}</div>
       </div>
     </div>
-    <div class="d-status">${statusArea}${it ? tube(it.status, p) : ''}</div>
+    <div class="d-status"><div class="d-status-row">${statusArea}${rewatchChip(it)}</div>${it ? tube(it.status, p) : ''}</div>
     ${it ? html`<button class="rating-box ${it.rating != null ? 'has' : ''}" data-act="d-rate">
         ${it.rating != null ? html`<span class="rate-num">${fmtRating(it.rating)}</span><span class="rate-l">Il tuo voto<small>tocca per cambiarlo</small></span>` : html`<span class="rate-l">Dai un voto<small>da 0.1 a 10.0</small></span>`}
       </button>` : ''}
     ${d?.overview ? html`<p class="overview">${d.overview}</p>` : (cur.err ? html`<p class="muted pad">${cur.err}</p>` : '')}
     ${facts.length ? html`<dl class="facts">${facts.map(([k, v]) => html`<div><dt>${k}</dt><dd>${v}</dd></div>`)}</dl>` : ''}
     ${resumeHtml(key, it, m)}
-    ${rewatchHtml(it)}
     ${seasonsHtml}
     <section class="d-sec">
       <h2>Liste</h2>
@@ -415,21 +431,48 @@ export function listsSheet(key, entryInfo) {
 // ---------- azioni ----------
 function toggleEpisode(s, e) {
   const key = cur.key; const it = item(key);
-  if (isWatched(it, s, e)) A.unmarkEpisodes(key, [[s, e]]);
+  if (isWatched(it, s, e)) watchedEpisodeSheet(key, s, e);
   else A.markEpisodes(key, [[s, e]], info(), { offerPrevious: true });
 }
 
-async function toggleSeason(s) {
+// Cerchio di spunta su una stagione già vista tutta: rivista, togli una rivisione, oppure togli.
+function watchedSeasonSheet(s) {
+  const key = cur.key; const it = item(key);
+  const eps = Object.keys(it?.eps?.[String(s)] || {}).map(Number);
+  if (!eps.length) return;
+  const name = s === 0 ? 'Speciali' : `Stagione ${s}`;
+  const rws = eps.map((e) => rewatchOf(it, s, e));
+  const min = Math.min(...rws); const max = Math.max(...rws);
+  const times = min === max ? (min ? ` · vista ${min + 1} volte` : '') : ` · episodi visti da ${min + 1} a ${max + 1} volte`;
+  openSheet(String(html`
+    <h3 class="sheet-title">${name}</h3>
+    <p class="sheet-text">${eps.length} episodi visti${times}</p>
+    <div class="opt-list">
+      <button class="opt act-opt" data-o="rw">${icon.replay}L’ho rivista</button>
+      ${max ? html`<button class="opt act-opt" data-o="rw-1">${icon.minus}Togli una rivisione</button>` : ''}
+      <button class="opt act-opt bad" data-o="off">${icon.x}${s === 0 ? 'Togli gli speciali' : 'Togli la stagione'}</button>
+    </div>`), {
+    onMount: (el, close) => {
+      el.querySelectorAll('[data-o]').forEach((b) => {
+        b.onclick = () => {
+          close();
+          const o = b.dataset.o;
+          if (o === 'rw') A.rewatchSeason(key, s, 1);
+          if (o === 'rw-1') A.rewatchSeason(key, s, -1);
+          if (o === 'off') A.unmarkEpisodes(key, eps.map((e) => [s, e]));
+        };
+      });
+    },
+  });
+}
+
+function toggleSeason(s) {
   const key = cur.key; const it = item(key); const m = metaOf(key);
   const id = Number(key.split(':')[1]);
   const sl = seasonList(m).find((x) => x.n === s);
   if (!sl) return;
   const watched = Object.keys(it?.eps?.[String(s)] || {}).length;
-  if (sl.count > 0 && watched >= sl.count) {
-    const ok = await confirmSheet(`Togliere ${s === 0 ? 'gli speciali' : `la stagione ${s}`}?`, `${watched} episodi tornano non visti.`, 'Togli', { danger: true });
-    if (ok) A.unmarkEpisodes(key, Object.keys(it.eps[String(s)]).map((e) => [s, Number(e)]));
-    return;
-  }
+  if (sl.count > 0 && watched >= sl.count) { watchedSeasonSheet(s); return; }
   const data = getSeason(id, s);
   const first = s > 0 ? epRange(m, s)[0] : 1;
   const eps = data?.eps?.length ? data.eps : Array.from({ length: sl.count }, (_, i) => ({ n: first + i, air: null }));
@@ -447,13 +490,6 @@ export const detailActions = {
   'd-more': () => moreSheet(),
   'd-fav': () => { A.toggleFav(cur.key, info()); },
   'd-add': (el) => { A.setStatus(cur.key, el.dataset.st, info()); toast(el.dataset.st === 'completed' ? 'Segnato come visto' : 'Aggiunto a da guardare'); },
-  'd-rw': (el) => {
-    const it = item(cur.key);
-    if (!it) return;
-    const n = (it.rewatch || 0) + Number(el.dataset.d);
-    A.setRewatch(cur.key, n);
-    if (it.type === 'tv' && Number(el.dataset.d) > 0) toast('Contata anche una visione in più per ogni episodio visto');
-  },
-  'd-season-rw': (el) => A.rewatchSeason(cur.key, Number(el.dataset.s)),
+  'd-rw': () => rewatchSheet(),
   'd-lists': () => listsSheet(cur.key, info()),
 };

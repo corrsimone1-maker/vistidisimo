@@ -111,18 +111,25 @@ export function setEpisodeRewatch(key, s, e, n) {
   dispatch(...ops);
 }
 
-// Hai rivisto una stagione intera: +1 a ogni episodio visto, con «Annulla».
-export function rewatchSeason(key, s) {
+// Una stagione rivista (delta +1, con «Annulla») o una rivisione in meno (delta −1, solo agli episodi
+// che ne avevano) per ogni episodio visto della stagione.
+export function rewatchSeason(key, s, delta = 1) {
   const it = item(key);
   if (!it) return;
-  const list = watchedList(it, { specials: true, season: s });
+  let list = watchedList(it, { specials: true, season: s });
+  if (delta < 0) list = list.filter(([a, b]) => rewatchOf(it, a, b) > 0);
   if (!list.length) return;
+  const name = s === 0 ? 'speciali' : `stagione ${s}`;
   const before = list.map(([a, b]) => [String(a), String(b), rewatchOf(it, a, b)]);
-  dispatch({ op: 'rw', key, set: rwOps(it, list, 1), msg: `Rivista ${it.title} ${s === 0 ? 'speciali' : `stagione ${s}`}` }, { op: 'set', key, fields: { last: nowIso() } });
-  toast(`${s === 0 ? 'Speciali' : `Stagione ${s}`}: +1 visione a ${list.length} episodi`, {
-    label: 'Annulla',
-    run: () => dispatch({ op: 'rw', key, set: before, msg: `Annulla rivisione di ${it.title}` }),
-  });
+  const ops = [{ op: 'rw', key, set: rwOps(it, list, delta), msg: delta > 0 ? `Rivista ${it.title} ${name}` : `${it.title} ${name}: una rivisione in meno` }];
+  if (delta > 0) ops.push({ op: 'set', key, fields: { last: nowIso() } });
+  dispatch(...ops);
+  if (delta > 0) {
+    toast(`${s === 0 ? 'Speciali rivisti' : `Stagione ${s} rivista`}`, {
+      label: 'Annulla',
+      run: () => dispatch({ op: 'rw', key, set: before, msg: `Annulla rivisione di ${it.title}` }),
+    });
+  }
 }
 
 export function setRating(key, value) {
