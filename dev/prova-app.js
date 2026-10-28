@@ -21,7 +21,7 @@ const DATA = path.join(ROOT, 'vistidisimo-dati');
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   const base = 'http://127.0.0.1:8130/vistidisimo/';
-  const routes = ['#/home', '#/libreria', '#/cerca', '#/prossimi', '#/liste', '#/t/tv/31910', '#/t/movie/129', '#/impostazioni', '#/raccolta/serie', '#/ep/73223/1/4', '#/ep/73223/2/3', '#/ripasso/73223/1', '#/ripasso/70523'];
+  const routes = ['#/home', '#/libreria', '#/cerca', '#/prossimi', '#/liste', '#/t/tv/31910', '#/t/movie/129', '#/impostazioni', '#/raccolta/serie', '#/ep/73223/1/4', '#/ep/73223/2/3', '#/ripasso/73223/1', '#/ripasso/70523', '#/persona/777/regia', '#/persona/777/scrittura', '#/t/movie/157336'];
   for (const r of routes) {
     await page.goto(base + r);
     await page.waitForTimeout(1200);

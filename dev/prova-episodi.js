@@ -67,7 +67,6 @@ const DARK = 70523; // Dark: rivista 3 volte, ogni episodio visto 4 volte
   check('trama italiana', /^Trama dell/.test(await text('.epd-ov')));
   check('niente avviso sulla lingua', !/Trama in /.test(await text('#view')));
   check('fotogrammi mostrati', (await page.$$('.still')).length >= 3);
-  check('regia e sceneggiatura', /Regista Finto/.test(await text('.facts')) && /Autrice Finta/.test(await text('.facts')));
   await shot('e03-episodio');
   await shot('e03b-episodio-intero', true);
 

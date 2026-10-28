@@ -1,6 +1,6 @@
 import { html, raw, icon, img, fmtRating, fmtDay, today, daysBetween, statusLabel, openSheet, confirmSheet, promptSheet, toast, kindBadge, tube, esc } from '../ui.js';
 import { item, metaOf, lib, putMeta, scheduleMetaSave } from '../store.js';
-import { fetchDetails, fetchImages, metaFromDetails, tmdbToken } from '../tmdb.js';
+import { fetchDetails, fetchImages, metaFromDetails, tmdbToken, movieCrew } from '../tmdb.js';
 import { isAnime, isAnimeResult, progress, isWatched, isAired, epRange, watchedCount, airedCount, nextEpisode, rewatchOf, furthest, lastWatchDate } from '../derive.js';
 import * as A from '../actions.js';
 import { getSeason } from './upcoming.js';
@@ -8,6 +8,9 @@ import { titleOf, seenTitles } from './common.js';
 import { agoText, watchedEpisodeSheet } from './episode.js';
 
 let cur = { key: null, d: null, err: '', open: new Set() };
+// dettagli già scaricati in questa sessione: tornando su un titolo la pagina è subito completa
+// (e alla stessa altezza, così lo scroll si può ripristinare); intanto si riscaricano
+const seenDetails = new Map(); // key -> { d, open }
 let repaint = () => {};
 
 const TV_STATUS = { 'Returning Series': 'In corso', Ended: 'Conclusa', Canceled: 'Cancellata', 'In Production': 'In produzione', Planned: 'Annunciata', Pilot: 'Pilot' };
@@ -17,10 +20,11 @@ async function load(type, id) {
   const key = `${type}:${id}`;
   if (!tmdbToken()) return;
   try {
-    const d = await fetchDetails(type, id, { overview: true });
+    const d = await fetchDetails(type, id, { overview: true, credits: type === 'movie' });
     if (cur.key !== key) return;
     if (!d) { cur.err = 'TMDB non conosce questo titolo.'; repaint(); return; }
     cur.d = d;
+    seenDetails.set(key, { d, open: cur.open });
     seenTitles.set(key, { title: d.title || d.name || '', year: Number((d.release_date || d.first_air_date || '').slice(0, 4)) || null });
     if (item(key) || metaOf(key)) { putMeta(key, metaFromDetails(type, d)); scheduleMetaSave(); }
     repaint();
@@ -156,7 +160,11 @@ function rewatchSheet() {
 export function renderDetail(type, id, rerender) {
   repaint = rerender;
   const key = `${type}:${id}`;
-  if (cur.key !== key) { cur = { key, d: null, err: '', open: new Set() }; load(type, id); }
+  if (cur.key !== key) {
+    const was = seenDetails.get(key);
+    cur = { key, d: was?.d || null, err: '', open: was?.open || new Set() };
+    load(type, id);
+  }
   const it = item(key); const m = metaOf(key); const d = cur.d;
   const title = d?.title || d?.name || titleOf(key, it, m);
   const poster = it?.poster || d?.poster_path || m?.p;
@@ -186,6 +194,11 @@ export function renderDetail(type, id, rerender) {
   // info
   const facts = [];
   if (type === 'movie') {
+    // regia e sceneggiatura: ogni nome porta a tutti i suoi film
+    const people = (list, role) => list.slice(0, 3).map((x, i) => html`${i ? ', ' : ''}<a class="person" href="#/persona/${x.id}/${role}">${x.name}</a>`);
+    const crew = movieCrew(d);
+    if (crew.directors.length) facts.push(['Regia', people(crew.directors, 'regia')]);
+    if (crew.writers.length) facts.push(['Sceneggiatura', people(crew.writers, 'scrittura')]);
     if (d?.release_date || m?.rd) facts.push(['Uscita', fmtDay(d?.release_date || m.rd)]);
     if (d?.runtime || m?.rt) facts.push(['Durata', runtimeText(d?.runtime || m.rt)]);
     if (it?.status === 'completed' && it.seen) facts.push(['Visto il', fmtDay(it.seen)]);

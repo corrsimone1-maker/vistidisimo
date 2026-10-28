@@ -69,8 +69,8 @@ const NON_LATIN = /[\u0400-\u04ff\u0590-\u06ff\u0e00-\u0e7f\u3040-\u30ff\u3400-\
 export const nonLatin = (s) => !!s && NON_LATIN.test(s);
 
 // Dettagli in italiano; se il titolo non è leggibile (o manca la trama e serve) ripiega sull'inglese.
-export async function fetchDetails(type, id, { overview = false } = {}) {
-  const d = await tm(`/${type}/${id}`);
+export async function fetchDetails(type, id, { overview = false, credits = false } = {}) {
+  const d = await tm(`/${type}/${id}`, credits ? { append_to_response: 'credits' } : {});
   if (!d) return d;
   const k = type === 'movie' ? 'title' : 'name';
   if (nonLatin(d[k]) || (overview && !d.overview)) {
@@ -130,8 +130,8 @@ export function pickPlot(translations) {
   return { name, ov, lang };
 }
 
-// Tutto quello che TMDB sa di un episodio: titolo e trama (it → en → es), regia, sceneggiatura,
-// e tutti i fotogrammi (stills) in ogni lingua, ordinati per voto.
+// Tutto quello che TMDB sa di un episodio: titolo e trama (it → en → es) e tutti i fotogrammi
+// (stills) in ogni lingua, ordinati per voto.
 export async function fetchEpisode(id, s, e) {
   const base = `/tv/${id}/season/${s}/episode/${e}`;
   const [d, im] = await Promise.all([
@@ -143,8 +143,6 @@ export async function fetchEpisode(id, s, e) {
   // la versione italiana arriva anche nei campi principali (la richiesta è in it-IT)
   if ((d.overview || '').trim() || (d.name || '').trim()) tr.unshift({ iso_639_1: 'it', iso_3166_1: 'IT', data: { name: d.name || '', overview: d.overview || '' } });
   const plot = pickPlot(tr);
-  const crew = d.crew || [];
-  const names = (jobs) => [...new Set(crew.filter((c) => jobs.includes(c.job)).map((c) => c.name))];
   const stills = (im?.stills || [])
     .map((x) => ({ p: x.file_path, v: x.vote_average || 0, n: x.vote_count || 0, w: x.width || 0 }))
     .sort((a, b) => b.v - a.v || b.n - a.n || b.w - a.w)
@@ -154,9 +152,44 @@ export async function fetchEpisode(id, s, e) {
   return {
     name: plot.name || d.name || '', ov: plot.ov, lang: plot.lang,
     air: d.air_date || null, rt: d.runtime || null,
-    directors: names(['Director']), writers: names(['Writer', 'Screenplay', 'Teleplay', 'Story']),
     stills,
   };
+}
+
+// ---- persone: regia e sceneggiatura ----
+export const WRITING_JOBS = ['Screenplay', 'Writer'];
+
+// Chi ha diretto e chi ha scritto un film, dai crediti di TMDB: { directors: [{id, name}], writers: [...] }
+export function movieCrew(d) {
+  const crew = d?.credits?.crew || [];
+  const pick = (jobs) => {
+    const out = new Map();
+    for (const c of crew) if (jobs.includes(c.job) && !out.has(c.id)) out.set(c.id, { id: c.id, name: c.name });
+    return [...out.values()];
+  };
+  return { directors: pick(['Director']), writers: pick(WRITING_JOBS) };
+}
+
+// Tutti i film di una persona come regista e come sceneggiatore, dal più vecchio al più recente
+// (quelli senza data di uscita in fondo). I titoli in scrittura non latina si prendono in inglese.
+export async function fetchPerson(id) {
+  const d = await tm(`/person/${id}`, { append_to_response: 'movie_credits' });
+  if (!d) return null;
+  let crew = d.movie_credits?.crew || [];
+  if (crew.some((c) => nonLatin(c.title))) {
+    const en = await tm(`/person/${id}/movie_credits`, { language: 'en-US' }).catch(() => null);
+    const t = new Map((en?.crew || []).map((c) => [c.id, c.title]));
+    crew = crew.map((c) => (nonLatin(c.title) && t.get(c.id) && !nonLatin(t.get(c.id)) ? { ...c, title: t.get(c.id) } : c));
+  }
+  const films = (jobs) => {
+    const out = new Map();
+    for (const c of crew) {
+      if (!jobs.includes(c.job) || out.has(c.id)) continue;
+      out.set(c.id, { id: c.id, t: c.title || c.original_title || '', d: c.release_date || '', p: c.poster_path || null, genre_ids: c.genre_ids || [], original_language: c.original_language });
+    }
+    return [...out.values()].sort((a, b) => (a.d || '9999').localeCompare(b.d || '9999') || a.t.localeCompare(b.t));
+  };
+  return { name: d.name || '', directed: films(['Director']), wrote: films(WRITING_JOBS) };
 }
 
 // Esegue i lavori con al massimo `n` richieste contemporanee.

@@ -147,7 +147,33 @@ function makeMocks(libPath, { animeKeys = new Set() } = {}) {
         return { episode_number: first + i, name: t.name || `Episodio ${first + i}`, overview: t.ov, air_date: aired ? `${2015 + s}-0${1 + (i % 9)}-1${i % 9}` : day(3 + i * 7), still_path: `/s_${id}_${s}_${i + 1}.jpg`, runtime: 44 };
       }) };
     } else if ((m = p.match(/^\/tv\/(\d+)$/))) body = tvDetails(Number(m[1]));
-    else if ((m = p.match(/^\/movie\/(\d+)$/))) body = movieDetails(Number(m[1]));
+    else if ((m = p.match(/^\/movie\/(\d+)$/))) {
+      body = movieDetails(Number(m[1]));
+      // crediti: una regista finta (id 777) e due sceneggiatori, uno dei quali è anche lei
+      if ((u.searchParams.get('append_to_response') || '').includes('credits')) {
+        body.credits = { cast: [], crew: [
+          { id: 777, name: 'Regista Finta', job: 'Director', department: 'Directing' },
+          { id: 777, name: 'Regista Finta', job: 'Screenplay', department: 'Writing' },
+          { id: 778, name: 'Altro Autore', job: 'Writer', department: 'Writing' },
+          { id: 779, name: 'Autore del Romanzo', job: 'Novel', department: 'Writing' },
+        ] };
+      }
+    } else if ((m = p.match(/^\/person\/(\d+)(\/movie_credits)?$/))) {
+      // filmografia: alcuni film della libreria vera (Inception, Interstellar, Tenet), altri no,
+      // uno senza data, uno col titolo giapponese (in inglese con en-US), uno solo come sceneggiatrice
+      const en = u.searchParams.get('language') === 'en-US';
+      const film = (id, title, d, job) => ({ id, title, original_title: title, release_date: d, poster_path: `/p_movie_${id}.jpg`, genre_ids: [18], original_language: 'en', job, department: job === 'Director' ? 'Directing' : 'Writing' });
+      const crew = [
+        film(577922, 'Tenet', '2020-08-22', 'Director'), film(577922, 'Tenet', '2020-08-22', 'Screenplay'),
+        film(27205, 'Inception', '2010-07-15', 'Director'),
+        film(157336, 'Interstellar', '2014-11-05', 'Director'),
+        film(900001, 'Il primo cortometraggio', '1997-03-01', 'Director'),
+        film(900002, 'Progetto annunciato', '', 'Director'),
+        film(900003, en ? 'The Japanese One' : '日本の映画', '2005-06-01', 'Director'),
+        film(900004, 'Scritto e basta', '2002-01-01', 'Writer'),
+      ];
+      body = m[2] ? { id: Number(m[1]), crew, cast: [] } : { id: Number(m[1]), name: Number(m[1]) === 777 ? 'Regista Finta' : 'Altro Autore', movie_credits: { crew, cast: [] } };
+    }
     else if (p === '/configuration') body = { images: {} };
     else if (p === '/trending/all/week' || p === '/search/multi') {
       const q = (u.searchParams.get('query') || '').toLowerCase();

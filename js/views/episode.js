@@ -1,4 +1,4 @@
-// Scheda di un episodio (trama più completa che TMDB ha, regia, tutti i fotogrammi) e «Ripasso»
+// Scheda di un episodio (trama più completa che TMDB ha, tutti i fotogrammi) e «Ripasso»
 // (tutti gli episodi visti di una stagione, con immagine e trama, per ricordarsi dove eravamo rimasti).
 // Le trame: italiano, se manca inglese, se manca spagnolo; altre lingue no.
 import { html, raw, icon, img, fmtDay, today, daysBetween, openSheet, toast, closeAllSheets } from '../ui.js';
@@ -121,10 +121,6 @@ export function renderEpisode(id, s, e, rerender) {
   const { prev, next } = neighbors(m, s, e);
   const loading = !d && tmdbToken();
 
-  const facts = [];
-  if (data?.directors?.length) facts.push(['Regia', data.directors.join(', ')]);
-  if (data?.writers?.length) facts.push(['Sceneggiatura', data.writers.join(', ')]);
-
   let plot;
   if (hidden) plot = html`<button class="btn ghost small" data-act="ep-reveal">${icon.eye}Mostra trama e immagini</button>`;
   else if (ov) plot = html`<div class="epd-ov">${paragraphs(ov)}</div>`;
@@ -154,7 +150,6 @@ export function renderEpisode(id, s, e, rerender) {
       <span class="epd-seen">${watched ? html`<b>${rw ? `Visto ${rw + 1} volte` : 'Visto'}</b>${seenOn ? html`<small>${rw ? 'la prima volta ' : ''}il ${fmtDay(seenOn)}</small>` : ''}` : html`<b>${aired ? 'Da vedere' : 'Non ancora uscito'}</b>`}</span>
     </div>
     <section class="d-sec epd-plot"><h2>Trama</h2>${plot}</section>
-    ${facts.length ? html`<dl class="facts">${facts.map(([k, v]) => html`<div><dt>${k}</dt><dd>${v}</dd></div>`)}</dl>` : ''}
     ${!hidden && stills.length ? html`<section class="d-sec">
       <h2>Immagini <span class="count">${stills.length}</span></h2>
       <div class="stills">${stills.map((p, i) => html`<button class="still" data-act="ep-view" data-i="${i}" aria-label="Apri l’immagine ${i + 1}"><img loading="lazy" src="${img(p, 'w300')}" alt=""></button>`)}</div>

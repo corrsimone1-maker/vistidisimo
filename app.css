@@ -605,6 +605,12 @@ body.no-tabs #toast-root { bottom: calc(var(--safe-b) + 16px); }
 .viewer-top > * { pointer-events: auto; }
 .viewer-n { padding: 6px 11px; border-radius: 10px; background: rgba(18, 13, 31, .6); font: 600 13px var(--f-disp); color: var(--testo-2); }
 
+/* ---------- regia e sceneggiatura ---------- */
+.facts a.person { color: var(--lilla); }
+.person-count { margin: 0 var(--gut) 12px; color: var(--testo-2); font-size: 13.5px; font-weight: 600; }
+.person-count b { color: var(--testo); font-family: var(--f-disp); }
+.pc-year { display: block; margin-top: 1px; font: 600 11.5px var(--f-disp); color: var(--testo-3); }
+
 /* ---------- ripasso ---------- */
 .rp-show { display: block; margin: -8px var(--gut) 0; font-weight: 800; font-size: 14px; color: var(--lilla); }
 .rp-intro { margin: 6px var(--gut) 14px; color: var(--testo-2); font-size: 13.5px; font-weight: 600; }
