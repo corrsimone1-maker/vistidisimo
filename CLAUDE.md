@@ -20,12 +20,13 @@ HTML/CSS/JS statici, moduli ES senza build né dipendenze. Niente framework.
 | `js/tmdb.js` | API TMDB (lingua `it-IT`), `metaFromDetails`, `fetchSeason`, `pool` (max 6 richieste insieme) |
 | `js/derive.js` | avanzamento, stato automatico, prossimo episodio, anime, statistiche, % liste |
 | `js/actions.js` | azioni utente → operazioni |
+| `js/export.js` | esportazione per altre app: CSV di Letterboxd (film) e di Simkl (tutto) |
 | `js/ui.js` | template `html` con escape, icone SVG, locandina (`posterCard`), fogli dal basso, avvisi, date |
 | `js/views/*.js` | schermate: `home`, `library`, `search`, `upcoming` (Prossimi), `detail`, `episode` (scheda episodio e Ripasso), `person` (film di un regista), `lists`, `settings` |
 | `sw.js` | service worker: rete prima, cache solo come ripiego offline |
 | `dev/` | prove con Playwright e API finte (vedi sotto). Non fa parte dell'app |
 
-Rotte: `#/home`, `#/raccolta/<serie|film|serie-preferite|film-preferiti>`, `#/libreria`, `#/cerca`, `#/prossimi`, `#/t/<tv|movie>/<id>`, `#/ep/<idSerie>/<stagione>/<episodio>`, `#/ripasso/<idSerie>[/<stagione>]`, `#/persona/<idTMDB>`, `#/liste`, `#/lista/<id>`, `#/impostazioni`. La pagina del titolo, il Ripasso e la pagina di una persona tengono lo scroll quando ci torni da una loro sotto-pagina (`CHILD_OF` in `main.js`); i dettagli TMDB dei titoli aperti restano in memoria per la sessione (`seenDetails` in `detail.js`), così tornando la pagina è subito completa.
+Rotte: `#/home`, `#/raccolta/<serie|film|serie-preferite|film-preferiti>`, `#/libreria`, `#/cerca`, `#/prossimi`, `#/t/<tv|movie>/<id>`, `#/ep/<idSerie>/<stagione>/<episodio>`, `#/ripasso/<idSerie>[/<stagione>]`, `#/persona/<idTMDB>`, `#/liste`, `#/lista/<id>`, `#/impostazioni`. Le schede (titolo, episodio, ripasso, regista) ritrovano lo scroll solo quando ci torni con indietro/avanti della cronologia, non quando le riapri da un link: ogni voce nuova riceve un numero in `history.state` (`isHistoryReturn` in `main.js`, con `history.scrollRestoration = 'manual'`); le schede principali (Home, Libreria, Cerca, Prossimi, Liste) tengono sempre lo scroll (`KEEP_SCROLL`); i dettagli TMDB dei titoli aperti restano in memoria per la sessione (`seenDetails` in `detail.js`), così tornando la pagina è subito completa.
 
 ### Sincronizzazione (non romperla)
 - Ogni azione è un'**operazione** (`add`, `set`, `del`, `eps`, `rw`, `lnew`, `lset`, `ldel`, `ladd`, `lrem`, `lorder`) messa in coda in `localStorage` (`vds.ops`). La libreria mostrata = ultima versione scaricata (`vds.base`) + operazioni in coda.
@@ -49,7 +50,16 @@ Chiave `tipo:idTMDB` (`tv:48866`, `movie:129`). Stati: `planned` da guardare, `w
 - I 336 episodi rivisti sono stati recuperati dal `rewatchCount` del backup Refract (l'import iniziale aveva preso solo quello per titolo).
 - Il tempo in Home conta anche le rivisioni (episodi: `rw`; film: `rewatch`); il numero di episodi/film visti no.
 
-`meta.json` (cache TMDB, chiavi corte): `t` titolo, `ot` originale, `y` anno, `p` locandina, `b` sfondo, `g` generi, `l` lingua, `c` paesi, `rt` durata, `st` stato TMDB, `ss` stagioni `[n, episodi, data]`, `le` ultimo uscito `[s, e, data]`, `ne` prossimo `[s, e, data, nome]`, `rd` uscita film, `at` timestamp. Si aggiorna da solo: serie in corso ogni 12 h, finite ogni 30 giorni, film ogni 60.
+**Date**: tutte `YYYY-MM-DD` (l'app scrive `today()`); 82 episodi e 6 film importati con l'ora sono stati ripuliti il 28/10/2026.
+
+**Stati riallineati** (`reconcileStatuses` in `store.js`, dopo ogni aggiornamento da TMDB): solo per le serie in corso / in pari. Se dopo l'ultimo episodio visto ne è uscito un altro → in corso; se le hai viste tutte → in pari, o completata se la serie è finita. Le serie con episodi saltati nel mezzo (es. Black Mirror S2E4 e S4E5) non si toccano; completate, abbandonate e da guardare mai. Non cambia `last`.
+
+**Esportazione per altre app** (Impostazioni → «Esporta per altre app», `js/export.js`). Il backup completo resta `library.json` (+ «Scarica la libreria» e il CSV per Numbers con ogni episodio e data); questi file servono a portare la libreria in un'app fatta da altri:
+- «Film visti · Letterboxd» e «Film da vedere · Letterboxd»: formato di letterboxd.com/about/importing-data (`tmdbID,imdbID,Title,Year,WatchedDate,Rating10,Rewatch`; virgolette interne con la barra; voto intero 1–10; niente BOM; < 1 MB). Una riga per film con la prima data di visione (le date delle rivisioni non le abbiamo). È il formato per importare **in Letterboxd**; Refract e Simkl importano da Letterboxd, ma (non verificato) probabilmente leggono l'export di Letterboxd, non questo file: la strada sicura è passare da Letterboxd.
+- «Film, serie e anime · Simkl»: CSV per simkl.com/apps/import/csv (`simkl_id,TVDB_ID,TMDB,IMDB_ID,MAL_ID,Type,Title,Year,LastEpWatched,Watchlist,WatchedDate,Rating,Memo`, una riga per titolo, ultimo episodio come `s2e4`, stati `completed/watching/plantowatch/dropped`, tipo `movie/tv/anime`). Intestazione ricavata da convertitori che la usano, non da una specifica ufficiale. Gli id TVDB mancanti si chiedono a TMDB al primo export (`ensureTvIds`) e si salvano in `meta.json`; se servono richieste il file si scarica dal tasto «Scarica» dell'avviso (Safari vuole un tocco).
+- Nessun formato standard porta ogni singolo episodio con la sua data: per quello c'è `library.json`.
+
+`meta.json` (cache TMDB, chiavi corte): `t` titolo, `ot` originale, `y` anno, `p` locandina, `b` sfondo, `g` generi, `l` lingua, `c` paesi, `rt` durata, `st` stato TMDB, `ss` stagioni `[n, episodi, data]`, `le` ultimo uscito `[s, e, data]`, `ne` prossimo `[s, e, data, nome]`, `rd` uscita film, `im` id IMDb, `tvdb` id TVDB (serie; dagli `external_ids` chiesti insieme ai dettagli), `noIds` = TMDB non ha l'id TVDB, `at` timestamp. Si aggiorna da solo: serie in corso ogni 12 h, finite ogni 30 giorni, film ogni 60.
 
 ## Scelte di Simo (rispettale)
 - **Tema scuro**: notte violacea con lilla e neon blu/rosa. Font self-hosted: Unbounded (titoli, numeri) + Manrope (testo).
@@ -99,5 +109,6 @@ node prova-app.js                                        # nessuna schermata pi�
 node prova-copertine.js /percorso/screenshot             # cambia copertina e banner dal menu ⋯, salvataggio e ripristino
 node prova-episodi.js /percorso/screenshot               # scheda episodio (lingue, fotogrammi, visore, velo), ripasso, rivisioni di titoli/stagioni/episodi
 node prova-persone.js /percorso/screenshot               # regia nei film, pagina coi film di un regista dal più recente, senza corti
+node prova-export.js /percorso/screenshot                # export Letterboxd e Simkl coi dati veri, scroll solo tornando indietro
 ```
 Playwright è installato globalmente: lancia le prove con `NODE_PATH=$(npm root -g) node …`. Se una prova si interrompe può lasciare acceso il suo `python3 -m http.server`: spegnilo (`pkill -f "[h]ttp\.server 81"`) prima di rilanciare, se no la prova successiva sulla stessa porta usa il server vecchio. Le due repo devono stare una accanto all'altra (le prove leggono `../vistidisimo-dati/library.json` senza modificarlo). `mock.js` simula l'API Contents di GitHub (con sha e 409), TMDB (dettagli, stagioni, ricerca, tendenze) e le immagini. Viewport 393×852 come l'iPhone di Simo; guarda sempre gli screenshot.

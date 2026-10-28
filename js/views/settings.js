@@ -3,10 +3,12 @@ import { S, pull, flush, refreshMeta, saveConfig, forgetDevice, hasGhToken, lib,
 import { tm, tmdbToken } from '../tmdb.js';
 import { OWNER, DATA_REPO, serialize } from '../github.js';
 import { watchedCount, isAnime } from '../derive.js';
+import { letterboxdCsv, simklCsv, ensureTvIds, tvIdsMissing, exportName } from '../export.js';
 
-export const VERSION = '18';
+export const VERSION = '19';
 let busy = false;
 let note = '';
+let simklJob = null; // { done, total } mentre prepara il file per Simkl
 
 function syncText() {
   if (!hasGhToken()) return 'Non collegato.';
@@ -101,6 +103,12 @@ export function renderSettings() {
     <a class="btn ghost wide" href="https://github.com/${OWNER}/${DATA_REPO}/commits/main/library.json" target="_blank" rel="noopener">Storia delle modifiche</a>
   </section>
   <section class="set-sec">
+    <h2>Esporta per altre app</h2>
+    <button class="btn ghost wide" data-act="set-lb" data-v="visti">Film visti · Letterboxd</button>
+    <button class="btn ghost wide" data-act="set-lb" data-v="da-vedere">Film da vedere · Letterboxd</button>
+    <button class="btn ghost wide" data-act="set-simkl" ${simklJob ? 'disabled' : ''}>${simklJob ? `Preparo: ${simklJob.done} di ${simklJob.total}` : 'Film, serie e anime · Simkl'}</button>
+  </section>
+  <section class="set-sec">
     <h2>Questo dispositivo</h2>
     <button class="btn danger-ghost wide" data-act="set-forget">Scollega questo dispositivo</button>
   </section>` : ''}
@@ -141,6 +149,28 @@ export const settingsActions = {
   'set-meta': (el, { rerender }) => { refreshMeta({ force: true }); setTimeout(rerender, 50); },
   'set-download': () => download(`vistidisimo-${today()}.json`, serialize(lib()), 'application/json'),
   'set-csv': () => exportCsv(),
+  'set-lb': (el) => {
+    const watched = el.dataset.v === 'visti';
+    download(exportName(watched ? 'letterboxd-visti' : 'letterboxd-da-vedere'), letterboxdCsv({ watched }), 'text/csv');
+  },
+  'set-simkl': async (el, { rerender }) => {
+    if (simklJob) return;
+    const save = () => download(exportName('simkl'), simklCsv(), 'text/csv');
+    // se gli id ci sono già si scarica subito (dentro il tocco, come vuole Safari);
+    // se no prima si chiedono a TMDB e poi si scarica dal tasto dell'avviso
+    if (!tvIdsMissing().length) { save(); return; }
+    simklJob = { done: 0, total: 0 };
+    rerender();
+    try {
+      await ensureTvIds((done, total) => { simklJob = { done, total }; rerender(); });
+      toast('File per Simkl pronto', { label: 'Scarica', run: save });
+    } catch (e) {
+      toast(`Esportazione non riuscita (${e.message})`);
+    } finally {
+      simklJob = null;
+      rerender();
+    }
+  },
   'set-forget': async (el, { go }) => {
     const pending = S.ops.length;
     const ok = await confirmSheet('Scollegare questo dispositivo?', pending ? `Attenzione: ci sono ${pending} modifiche non ancora salvate che andrebbero perse.` : 'Cancello token e dati salvati su questo dispositivo. La libreria su GitHub non cambia.', 'Scollega', { danger: true });

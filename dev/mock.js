@@ -122,6 +122,10 @@ function makeMocks(libPath, { animeKeys = new Set() } = {}) {
       const t = m[1]; const id = m[2];
       const mk = (kind, langs) => langs.map((l, i) => ({ file_path: `/${kind}_${t}_${id}_${l || 'x'}${i}.jpg`, iso_639_1: l, vote_average: 5 + ((i * 7) % 5), vote_count: 10 - i }));
       body = { posters: mk('p', ['it', 'it', 'en', 'en', 'en', 'ja', 'ja', null, 'fr']), backdrops: mk('b', [null, null, null, 'en', 'it']), logos: [] };
+    } else if ((m = p.match(/^\/tv\/(\d+)\/external_ids$/))) {
+      // id esterni finti; la serie 1399 (Il Trono di Spade) su TMDB non ha l'id TVDB
+      const id = Number(m[1]);
+      body = { id, imdb_id: `tt${String(id).padStart(7, '0')}`, tvdb_id: id === 1399 ? null : 100000 + id };
     } else if ((m = p.match(/^\/tv\/(\d+)\/season\/(\d+)\/episode\/(\d+)\/images$/))) {
       // fotogrammi di un episodio, in più lingue e senza testo
       const [, id, s, e] = m;

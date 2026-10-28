@@ -6,8 +6,8 @@
 // sovrascrivono a vicenda.
 import { ghGet, ghPut, serialize, GhError } from './github.js';
 import { tmdbToken, fetchDetails, metaFromDetails, pool } from './tmdb.js';
-import { airedCount, watchedCount, isAbsolute, epRange } from './derive.js';
-import { today } from './ui.js';
+import { airedCount, watchedCount, isAbsolute, epRange, nextEpisode, isEnded } from './derive.js';
+import { today, statusLabel } from './ui.js';
 
 const LS = {
   get(k, fallback = null) { try { const v = localStorage.getItem(k); return v == null ? fallback : JSON.parse(v); } catch { return fallback; } },
@@ -309,6 +309,25 @@ function repairNumbering(key, m) {
   if (add.length) dispatch({ op: 'eps', key, rm, add: [], msg: `Corregge la numerazione degli episodi di ${it.title}` }, { op: 'eps', key, add });
 }
 
+// Riallinea lo stato delle serie che stai seguendo (in corso / in pari) ai dati di TMDB, come farebbe
+// segnando un episodio: se dopo l'ultimo visto ne è uscito un altro → in corso; se li hai visti tutti →
+// in pari, o completata se la serie è finita. Le serie con buchi nel mezzo (episodi saltati) restano
+// come sono; completate, abbandonate e da guardare non si toccano. `last` non cambia.
+export function reconcileStatuses() {
+  const ops = [];
+  for (const [key, it] of Object.entries(S.lib?.items || {})) {
+    if (it.type !== 'tv' || (it.status !== 'watching' && it.status !== 'uptodate')) continue;
+    const m = S.meta.items[key];
+    const a = airedCount(m); const w = watchedCount(it);
+    if (!m || !a || !w) continue;
+    let st = it.status;
+    if (nextEpisode(it, m)) st = 'watching';
+    else if (w >= a) st = isEnded(m) ? 'completed' : 'uptodate';
+    if (st !== it.status) ops.push({ op: 'set', key, fields: { status: st }, msg: `${it.title}: ${statusLabel('tv', st).toLowerCase()}` });
+  }
+  if (ops.length) dispatch(...ops);
+}
+
 let metaRunning = false;
 export async function refreshMeta({ force = false } = {}) {
   if (metaRunning || !tmdbToken() || !S.lib) return;
@@ -323,7 +342,7 @@ export async function refreshMeta({ force = false } = {}) {
         if (ma !== mb) return ma - mb; // prima quelli senza dati
         return (items[b]?.last || '').localeCompare(items[a]?.last || '');
       });
-    if (!keys.length) return;
+    if (!keys.length) { reconcileStatuses(); return; }
     const firstBuild = keys.filter((k) => !S.meta.items[k]).length > 40;
     S.metaJob = { done: 0, total: keys.length, firstBuild };
     notify();
@@ -339,6 +358,7 @@ export async function refreshMeta({ force = false } = {}) {
     });
     LS.set('vds.meta', { sha: S.metaSha, doc: S.meta });
     await saveMeta();
+    reconcileStatuses();
   } finally {
     metaRunning = false;
     S.metaJob = null;

@@ -38,6 +38,9 @@ export async function tm(path, params = {}, tokenOverride) {
 
 const year = (d) => (d ? Number(d.slice(0, 4)) : null);
 
+// id IMDb e TVDB, solo se ci sono (per tenere piccolo meta.json)
+const ids = (imdb, tvdb) => ({ ...(imdb ? { im: imdb } : {}), ...(tvdb ? { tvdb } : {}) });
+
 // Riassunto compatto di un titolo, salvato in meta.json.
 export function metaFromDetails(type, d) {
   if (type === 'movie') {
@@ -45,7 +48,7 @@ export function metaFromDetails(type, d) {
       t: d.title, ot: d.original_title, y: year(d.release_date), p: d.poster_path || null, b: d.backdrop_path || null,
       g: (d.genres || []).map((g) => g.id), l: d.original_language,
       c: d.origin_country?.length ? d.origin_country : (d.production_countries || []).map((c) => c.iso_3166_1),
-      rt: d.runtime || null, rd: d.release_date || null, st: d.status || null, at: Date.now(),
+      rt: d.runtime || null, rd: d.release_date || null, st: d.status || null, ...ids(d.imdb_id, null), at: Date.now(),
     };
   }
   const rt = d.episode_run_time?.length ? Math.round(d.episode_run_time.reduce((a, b) => a + b, 0) / d.episode_run_time.length)
@@ -59,6 +62,7 @@ export function metaFromDetails(type, d) {
     ss: (d.seasons || []).map((s) => [s.season_number, s.episode_count || 0, s.air_date || null]),
     le: le ? [le.season_number, le.episode_number, le.air_date || null] : null,
     ne: ne ? [ne.season_number, ne.episode_number, ne.air_date || null, ne.name || ''] : null,
+    ...ids(d.external_ids?.imdb_id, d.external_ids?.tvdb_id),
     at: Date.now(),
   };
 }
@@ -70,7 +74,9 @@ export const nonLatin = (s) => !!s && NON_LATIN.test(s);
 
 // Dettagli in italiano; se il titolo non è leggibile (o manca la trama e serve) ripiega sull'inglese.
 export async function fetchDetails(type, id, { overview = false, credits = false } = {}) {
-  const d = await tm(`/${type}/${id}`, credits ? { append_to_response: 'credits' } : {});
+  // per le serie anche gli id esterni (TVDB, IMDb): servono per esportare verso altre app
+  const extra = [credits && 'credits', type === 'tv' && 'external_ids'].filter(Boolean).join(',');
+  const d = await tm(`/${type}/${id}`, extra ? { append_to_response: extra } : {});
   if (!d) return d;
   const k = type === 'movie' ? 'title' : 'name';
   if (nonLatin(d[k]) || (overview && !d.overview)) {
@@ -197,6 +203,12 @@ export async function fetchDirector(id, knownRuntime = () => null) {
   const kept = list.filter((f) => !(f.rt > 0 && f.rt <= SHORT_MAX_MIN));
   kept.sort((a, b) => (b.d || '9999').localeCompare(a.d || '9999') || a.t.localeCompare(b.t));
   return { name: d.name || '', films: kept, shorts: list.length - kept.length };
+}
+
+// Id esterni di una serie (per gli export, quando meta.json non li ha ancora): { im, tvdb }
+export async function fetchTvIds(id) {
+  const d = await tm(`/tv/${id}/external_ids`, { language: null });
+  return { im: d?.imdb_id || null, tvdb: d?.tvdb_id || null };
 }
 
 // Esegue i lavori con al massimo `n` richieste contemporanee.

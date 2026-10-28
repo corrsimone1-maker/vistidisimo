@@ -83,22 +83,32 @@ function scheduleRerender() {
   rerenderTimer = setTimeout(() => { lastRerender = Date.now(); rerender(); }, wait);
 }
 
-// Scheda di un titolo e ripasso tengono lo scroll solo quando ci torni da una loro sotto-pagina
-// (un episodio), non quando li riapri da capo.
-const CHILD_OF = { t: new Set(['ep', 'ripasso', 'persona']), ripasso: new Set(['ep']), persona: new Set(['t']) };
+// Le schede (titolo, episodio, ripasso, regista) ritrovano lo scroll solo quando ci torni con
+// «indietro» (o «avanti») della cronologia, non quando le riapri da un link. Ogni voce nuova della
+// cronologia riceve un numero in history.state: se arrivando c'è già, è un ritorno.
+// lo scroll lo gestisce l'app: se lo ripristinasse anche il browser, quando arriva «hashchange»
+// la pagina che si lascia risulterebbe già spostata
+try { history.scrollRestoration = 'manual'; } catch { /* niente */ }
+let navCount = 0;
+try { history.replaceState({ vds: navCount }, ''); } catch { /* niente */ }
+function isHistoryReturn() {
+  if (history.state && history.state.vds != null) return true;
+  try { history.replaceState({ vds: ++navCount }, ''); } catch { /* niente */ }
+  return false;
+}
 
 function onHash() {
   scrollMem.set(currentHash, window.scrollY);
   const hs = {};
   view.querySelectorAll('[data-scroll]').forEach((el) => { hs[el.dataset.scroll] = el.scrollLeft; });
   scrollMem.set(currentHash + '|h', hs);
-  const from = parse(currentHash).name;
+  const back = isHistoryReturn();
   currentHash = location.hash;
   navDepth += 1;
   closeAllSheets();
   renderRoute();
   const r = parse(location.hash);
-  const keep = KEEP_SCROLL.has(r.name) || CHILD_OF[r.name]?.has(from);
+  const keep = KEEP_SCROLL.has(r.name) || back;
   const y = keep ? scrollMem.get(currentHash) || 0 : 0;
   const savedH = scrollMem.get(currentHash + '|h') || {};
   view.querySelectorAll('[data-scroll]').forEach((el) => { if (savedH[el.dataset.scroll] != null) el.scrollLeft = savedH[el.dataset.scroll]; });

@@ -19,6 +19,7 @@ Le serie e i film che ho visto. Web app personale (GitHub Pages) che sostituisce
 - **Episodio**: tocca il titolo di un episodio per trama (italiano, se manca inglese, se manca spagnolo), tutti i fotogrammi di TMDB e quante volte l'hai visto. Se non l'hai ancora visto, trama e immagini restano velate finché non tocchi.
 - **Ripasso**: gli episodi già visti di una stagione, uno dopo l'altro con immagine e trama, per ricordarsi dove eravamo rimasti. Dopo una pausa lunga la pagina della serie lo propone da sola.
 - **Registi**: nella pagina di un film tocca il nome del regista per vedere tutti i suoi film, dal più recente, senza cortometraggi, con quelli che hai già visto.
+- **Esporta per altre app** (Impostazioni): film per Letterboxd, tutto per Simkl. Il backup completo resta `library.json`.
 - **Rivisioni**: quante volte hai rivisto un film, una serie intera, una stagione o un singolo episodio.
 
 La barra sotto ogni locandina si riempie con l'avanzamento e ha il colore dello stato: viola completata, blu da guardare, giallo in corso, verde in pari, rosso abbandonata. L'iconcina in alto a sinistra dice se è un film o una serie (rosa se è un anime).

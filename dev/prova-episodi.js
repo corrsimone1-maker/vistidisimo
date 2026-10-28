@@ -43,8 +43,14 @@ const DARK = 70523; // Dark: rivista 3 volte, ogni episodio visto 4 volte
   console.log('   ', await text('.resume'));
   await shot('e00-dove-eravamo');
 
-  // pagina della serie con episodi rivisti
-  await page.goto(base + `#/t/tv/${BC}`);
+  // pagina di una serie con episodi rivisti nella stagione 1 (scelta dai dati veri: Simo li cambia);
+  // serve un episodio rivisto con la trama italiana nel TMDB finto (numero non multiplo di 3)
+  const RWK = Object.keys(lib0).find((k) => lib0[k].type === 'tv' && Object.keys(lib0[k].rw?.['1'] || {}).some((e) => e % 3));
+  const RWS = Number(RWK.split(':')[1]);
+  const rwEps = Object.keys(lib0[RWK].rw['1']);
+  const rwEp = rwEps.find((e) => e % 3);
+  console.log(`    serie con rivisti: ${lib0[RWK].title} (S1: ${rwEps.length} episodi rivisti)`);
+  await page.goto(base + `#/t/tv/${RWS}`);
   await page.waitForSelector('.d-head');
   await page.waitForTimeout(1500);
   check('niente scritte che spiegano', !/niente spoiler|Ripassa con immagini|quando la rivedi/.test(await text('#view')));
@@ -53,13 +59,15 @@ const DARK = 70523; // Dark: rivista 3 volte, ogni episodio visto 4 volte
   await page.click(`[data-act=d-season][data-s="1"]`);
   await page.waitForSelector('.eps .ep-t[href]');
   await page.waitForTimeout(600);
-  check('episodi rivisti segnati nella lista', (await page.$$('.rw-tag')).length === 3);
+  check('episodi rivisti segnati nella lista', (await page.$$('.rw-tag')).length === rwEps.length);
   await page.evaluate(() => document.querySelector('.rw-tag').scrollIntoView({ block: 'center' }));
   await shot('e02-stagione');
 
   // 2. scheda episodio: trama italiana, fotogrammi, regia
+  const href = `#/ep/${RWS}/1/${rwEp}`;
+  await page.evaluate((h) => document.querySelector(`.ep-t[href="${h}"]`).scrollIntoView({ block: 'center' }), href);
+  await page.waitForTimeout(200);
   const yBefore = await page.evaluate(() => window.scrollY);
-  const href = await page.$eval('.rw-tag', (e) => e.closest('a').getAttribute('href'));
   await page.click(`.ep-t[href="${href}"]`);
   await page.waitForSelector('.epd-ov p');
   await page.waitForTimeout(800);
@@ -72,14 +80,14 @@ const DARK = 70523; // Dark: rivista 3 volte, ogni episodio visto 4 volte
 
   // visioni in più dell'episodio
   const parts = href.replace('#/ep/', '').split('/').map(Number);
-  const rw0 = remote()[`tv:${BC}`].rw?.[parts[1]]?.[parts[2]] || 0;
+  const rw0 = remote()[RWK].rw?.[parts[1]]?.[parts[2]] || 0;
   await page.click('[data-act=ep-check]');
   await page.waitForSelector('.sheet [data-o=rw]');
   console.log('    foglio del cerchio:', await text('.sheet'));
   await shot('e03c-foglio-episodio');
   await page.click('.sheet [data-o=rw]');
   await page.waitForTimeout(2600);
-  const rw1 = remote()[`tv:${BC}`].rw?.[parts[1]]?.[parts[2]] || 0;
+  const rw1 = remote()[RWK].rw?.[parts[1]]?.[parts[2]] || 0;
   check(`cerchio → «L’ho rivisto»: +1 salvato su GitHub (${rw0} → ${rw1})`, rw1 === rw0 + 1);
   check('si vede «Visto N volte»', (await text('.epd-seen')).includes(`Visto ${rw1 + 1} volte`));
   await page.waitForSelector('.sheet-wrap', { state: 'detached' });
@@ -87,7 +95,7 @@ const DARK = 70523; // Dark: rivista 3 volte, ogni episodio visto 4 volte
   await page.waitForSelector('.sheet [data-o="rw-1"]');
   await page.click('.sheet [data-o="rw-1"]');
   await page.waitForTimeout(2600);
-  check('−1 torna com’era', (remote()[`tv:${BC}`].rw?.[parts[1]]?.[parts[2]] || 0) === rw0);
+  check('−1 torna com’era', (remote()[RWK].rw?.[parts[1]]?.[parts[2]] || 0) === rw0);
 
   // visore a tutto schermo
   await page.click('.still:nth-child(2)');
@@ -114,6 +122,8 @@ const DARK = 70523; // Dark: rivista 3 volte, ogni episodio visto 4 volte
     await page.goto(base + `#/ep/${BC}/1/${e}`);
     await page.waitForSelector('.epd-plot p');
     await page.waitForFunction(() => !/Carico la trama/.test(document.querySelector('.epd-plot').textContent), null, { timeout: 8000 });
+    // i dettagli dell'episodio (titolo vero, tutte le immagini) arrivano dopo la stagione
+    if (e === 4) await page.waitForFunction(() => document.querySelector('.epd-head h1').textContent !== 'Episodio 4', null, { timeout: 8000 }).catch(() => {});
     const plot = await text('.epd-plot');
     const h1 = await text('.epd-head h1');
     if (want === null) check(`E${e}: nessuna trama (solo francese su TMDB)`, /Trama non disponibile/.test(plot));
@@ -123,7 +133,9 @@ const DARK = 70523; // Dark: rivista 3 volte, ogni episodio visto 4 volte
   }
 
   // 5. episodio non ancora visto: trama e immagini nascoste finché non tocchi
-  await page.goto(base + `#/ep/${BC}/2/3`);
+  // il primo episodio della stagione 2 di Black Clover che Simo non ha ancora segnato
+  const bcNext = Object.keys(lib0[`tv:${BC}`].eps['2'] || {}).length + 1;
+  await page.goto(base + `#/ep/${BC}/2/${bcNext}`);
   await page.waitForSelector('.epd-head');
   await page.waitForTimeout(1200);
   check('episodio non visto: velo sopra trama e immagini', (await page.$('.veil')) != null && (await page.$('.still')) == null);
