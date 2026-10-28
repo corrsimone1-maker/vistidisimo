@@ -156,40 +156,47 @@ export async function fetchEpisode(id, s, e) {
   };
 }
 
-// ---- persone: regia e sceneggiatura ----
-export const WRITING_JOBS = ['Screenplay', 'Writer'];
-
-// Chi ha diretto e chi ha scritto un film, dai crediti di TMDB: { directors: [{id, name}], writers: [...] }
-export function movieCrew(d) {
-  const crew = d?.credits?.crew || [];
-  const pick = (jobs) => {
-    const out = new Map();
-    for (const c of crew) if (jobs.includes(c.job) && !out.has(c.id)) out.set(c.id, { id: c.id, name: c.name });
-    return [...out.values()];
-  };
-  return { directors: pick(['Director']), writers: pick(WRITING_JOBS) };
+// ---- registi ----
+// Chi ha diretto un film, dai crediti di TMDB: [{ id, name }]
+export function movieDirectors(d) {
+  const out = new Map();
+  for (const c of d?.credits?.crew || []) if (c.job === 'Director' && !out.has(c.id)) out.set(c.id, { id: c.id, name: c.name });
+  return [...out.values()];
 }
 
-// Tutti i film di una persona come regista e come sceneggiatore, dal più vecchio al più recente
-// (quelli senza data di uscita in fondo). I titoli in scrittura non latina si prendono in inglese.
-export async function fetchPerson(id) {
+// Un cortometraggio dura 40 minuti o meno, titoli di coda compresi (la soglia dell'Academy).
+export const SHORT_MAX_MIN = 40;
+const runtimes = new Map(); // id film -> minuti (0 = sconosciuta), per la sessione
+
+// Tutti i film diretti da una persona, dal più recente al più vecchio (quelli annunciati senza data
+// in cima). Fuori i cortometraggi e i contenuti «video» di TMDB (making of e simili). La durata
+// dei film che non sono già in meta.json (knownRuntime) si chiede a TMDB, 6 richieste per volta.
+// I titoli in scrittura non latina si prendono in inglese.
+export async function fetchDirector(id, knownRuntime = () => null) {
   const d = await tm(`/person/${id}`, { append_to_response: 'movie_credits' });
   if (!d) return null;
-  let crew = d.movie_credits?.crew || [];
+  let crew = (d.movie_credits?.crew || []).filter((c) => c.job === 'Director' && !c.video);
   if (crew.some((c) => nonLatin(c.title))) {
     const en = await tm(`/person/${id}/movie_credits`, { language: 'en-US' }).catch(() => null);
     const t = new Map((en?.crew || []).map((c) => [c.id, c.title]));
     crew = crew.map((c) => (nonLatin(c.title) && t.get(c.id) && !nonLatin(t.get(c.id)) ? { ...c, title: t.get(c.id) } : c));
   }
-  const films = (jobs) => {
-    const out = new Map();
-    for (const c of crew) {
-      if (!jobs.includes(c.job) || out.has(c.id)) continue;
-      out.set(c.id, { id: c.id, t: c.title || c.original_title || '', d: c.release_date || '', p: c.poster_path || null, genre_ids: c.genre_ids || [], original_language: c.original_language });
-    }
-    return [...out.values()].sort((a, b) => (a.d || '9999').localeCompare(b.d || '9999') || a.t.localeCompare(b.t));
-  };
-  return { name: d.name || '', directed: films(['Director']), wrote: films(WRITING_JOBS) };
+  const films = new Map();
+  for (const c of crew) {
+    if (films.has(c.id)) continue;
+    films.set(c.id, { id: c.id, t: c.title || c.original_title || '', d: c.release_date || '', p: c.poster_path || null, genre_ids: c.genre_ids || [], original_language: c.original_language });
+  }
+  const list = [...films.values()];
+  const todo = list.filter((f) => !runtimes.has(f.id) && !knownRuntime(f.id));
+  await pool(todo, 6, async (f) => {
+    const m = await tm(`/movie/${f.id}`);
+    runtimes.set(f.id, m?.runtime || 0);
+  });
+  for (const f of list) f.rt = knownRuntime(f.id) || runtimes.get(f.id) || 0;
+  // durata sconosciuta (0) = si tiene: meglio un film in più che uno vero nascosto
+  const kept = list.filter((f) => !(f.rt > 0 && f.rt <= SHORT_MAX_MIN));
+  kept.sort((a, b) => (b.d || '9999').localeCompare(a.d || '9999') || a.t.localeCompare(b.t));
+  return { name: d.name || '', films: kept, shorts: list.length - kept.length };
 }
 
 // Esegue i lavori con al massimo `n` richieste contemporanee.

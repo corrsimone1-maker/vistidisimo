@@ -1,6 +1,6 @@
 import { html, raw, icon, img, fmtRating, fmtDay, today, daysBetween, statusLabel, openSheet, confirmSheet, promptSheet, toast, kindBadge, tube, esc } from '../ui.js';
 import { item, metaOf, lib, putMeta, scheduleMetaSave } from '../store.js';
-import { fetchDetails, fetchImages, metaFromDetails, tmdbToken, movieCrew } from '../tmdb.js';
+import { fetchDetails, fetchImages, metaFromDetails, tmdbToken, movieDirectors } from '../tmdb.js';
 import { isAnime, isAnimeResult, progress, isWatched, isAired, epRange, watchedCount, airedCount, nextEpisode, rewatchOf, furthest, lastWatchDate } from '../derive.js';
 import * as A from '../actions.js';
 import { getSeason } from './upcoming.js';
@@ -194,11 +194,9 @@ export function renderDetail(type, id, rerender) {
   // info
   const facts = [];
   if (type === 'movie') {
-    // regia e sceneggiatura: ogni nome porta a tutti i suoi film
-    const people = (list, role) => list.slice(0, 3).map((x, i) => html`${i ? ', ' : ''}<a class="person" href="#/persona/${x.id}/${role}">${x.name}</a>`);
-    const crew = movieCrew(d);
-    if (crew.directors.length) facts.push(['Regia', people(crew.directors, 'regia')]);
-    if (crew.writers.length) facts.push(['Sceneggiatura', people(crew.writers, 'scrittura')]);
+    // regia: ogni nome porta a tutti i suoi film
+    const dirs = movieDirectors(d).slice(0, 3);
+    if (dirs.length) facts.push(['Regia', dirs.map((x, i) => html`${i ? ', ' : ''}<a class="person" href="#/persona/${x.id}">${x.name}</a>`)]);
     if (d?.release_date || m?.rd) facts.push(['Uscita', fmtDay(d?.release_date || m.rd)]);
     if (d?.runtime || m?.rt) facts.push(['Durata', runtimeText(d?.runtime || m.rt)]);
     if (it?.status === 'completed' && it.seen) facts.push(['Visto il', fmtDay(it.seen)]);

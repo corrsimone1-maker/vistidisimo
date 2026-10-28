@@ -2,6 +2,9 @@
 const fs = require('fs');
 const crypto = require('crypto');
 
+// durate dei film finti della filmografia: due corti (12 e 40 minuti), uno da 41, uno senza durata
+const SHORTS = { 900001: 12, 900005: 40, 900006: 41, 900002: 0 };
+
 function makeMocks(libPath, { animeKeys = new Set() } = {}) {
   const lib = JSON.parse(fs.readFileSync(libPath, 'utf8'));
   const files = { 'library.json': fs.readFileSync(libPath, 'utf8') };
@@ -94,7 +97,7 @@ function makeMocks(libPath, { animeKeys = new Set() } = {}) {
       id, title: title || `Film ${id}`, original_title: title || `Film ${id}`, release_date: future ? day(12) : `${it?.year || 2010}-05-01`,
       poster_path: `/p_movie_${id}.jpg`, backdrop_path: `/b_movie_${id}.jpg`, overview: 'Trama di prova del film.',
       genres: anime ? [{ id: 16, name: 'Animazione' }, { id: 14, name: 'Fantasy' }] : [{ id: 18, name: 'Dramma' }],
-      original_language: anime ? 'ja' : 'en', origin_country: anime ? ['JP'] : ['US'], runtime: 90 + (id % 50), status: 'Released',
+      original_language: anime ? 'ja' : 'en', origin_country: anime ? ['JP'] : ['US'], runtime: SHORTS[id] ?? 90 + (id % 50), status: 'Released',
     };
   }
 
@@ -162,7 +165,7 @@ function makeMocks(libPath, { animeKeys = new Set() } = {}) {
       // filmografia: alcuni film della libreria vera (Inception, Interstellar, Tenet), altri no,
       // uno senza data, uno col titolo giapponese (in inglese con en-US), uno solo come sceneggiatrice
       const en = u.searchParams.get('language') === 'en-US';
-      const film = (id, title, d, job) => ({ id, title, original_title: title, release_date: d, poster_path: `/p_movie_${id}.jpg`, genre_ids: [18], original_language: 'en', job, department: job === 'Director' ? 'Directing' : 'Writing' });
+      const film = (id, title, d, job, video = false) => ({ id, title, original_title: title, release_date: d, poster_path: `/p_movie_${id}.jpg`, genre_ids: [18], original_language: 'en', job, department: job === 'Director' ? 'Directing' : 'Writing', video });
       const crew = [
         film(577922, 'Tenet', '2020-08-22', 'Director'), film(577922, 'Tenet', '2020-08-22', 'Screenplay'),
         film(27205, 'Inception', '2010-07-15', 'Director'),
@@ -171,6 +174,9 @@ function makeMocks(libPath, { animeKeys = new Set() } = {}) {
         film(900002, 'Progetto annunciato', '', 'Director'),
         film(900003, en ? 'The Japanese One' : '日本の映画', '2005-06-01', 'Director'),
         film(900004, 'Scritto e basta', '2002-01-01', 'Writer'),
+        film(900005, 'Corto di 40 minuti', '1999-01-01', 'Director'),
+        film(900006, 'Mediometraggio di 41 minuti', '2001-01-01', 'Director'),
+        film(900007, 'Dietro le quinte', '2015-01-01', 'Director', true),
       ];
       body = m[2] ? { id: Number(m[1]), crew, cast: [] } : { id: Number(m[1]), name: Number(m[1]) === 777 ? 'Regista Finta' : 'Altro Autore', movie_credits: { crew, cast: [] } };
     }

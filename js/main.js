@@ -7,7 +7,7 @@ import { renderSearch, searchInputs, searchActions } from './views/search.js';
 import { renderUpcoming, upcomingActions } from './views/upcoming.js';
 import { renderDetail, detailActions } from './views/detail.js';
 import { renderEpisode, renderRipasso, episodeActions } from './views/episode.js';
-import { renderPerson, personActions } from './views/person.js';
+import { renderPerson } from './views/person.js';
 import { renderLists, renderList, listActions, initReorder } from './views/lists.js';
 import { renderSettings, settingsActions } from './views/settings.js';
 
@@ -37,7 +37,7 @@ function renderRoute() {
     case 'prossimi': out = renderUpcoming(rerender); break;
     case 't': out = renderDetail(r.parts[1] === 'movie' ? 'movie' : 'tv', Number(r.parts[2]), rerender); break;
     case 'ep': out = renderEpisode(Number(r.parts[1]), Number(r.parts[2]), Number(r.parts[3]), rerender); break;
-    case 'persona': out = renderPerson(Number(r.parts[1]), r.parts[2] || 'regia', rerender); break;
+    case 'persona': out = renderPerson(Number(r.parts[1]), rerender); break;
     case 'ripasso': out = renderRipasso(Number(r.parts[1]), r.parts[2] == null ? null : Number(r.parts[2]), rerender); break;
     case 'liste': out = renderLists(); break;
     case 'lista': out = renderList(decodeURIComponent(r.parts[1] || '')); break;
@@ -109,7 +109,7 @@ const go = (hash) => { location.hash = hash; };
 const back = () => { if (navDepth > 0 && history.length > 1) { navDepth -= 2; history.back(); } else location.hash = '#/home'; };
 
 const ACTIONS = {
-  ...libraryActions, ...searchActions, ...upcomingActions, ...detailActions, ...episodeActions, ...personActions, ...listActions, ...settingsActions,
+  ...libraryActions, ...searchActions, ...upcomingActions, ...detailActions, ...episodeActions, ...listActions, ...settingsActions,
   back: () => back(),
   'up-check': (el) => {
     const key = el.dataset.key; const s = Number(el.dataset.s); const e = Number(el.dataset.e);
