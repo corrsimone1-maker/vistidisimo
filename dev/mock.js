@@ -103,7 +103,12 @@ function makeMocks(libPath, { animeKeys = new Set() } = {}) {
     const p = u.pathname.replace(/^\/3/, '');
     let body = null; let m;
     await new Promise((r) => setTimeout(r, 5 + Math.random() * 25));
-    if ((m = p.match(/^\/tv\/(\d+)\/season\/(\d+)$/))) {
+    if ((m = p.match(/^\/(tv|movie)\/(\d+)\/images$/))) {
+      // copertine e banner in più lingue, come su TMDB
+      const t = m[1]; const id = m[2];
+      const mk = (kind, langs) => langs.map((l, i) => ({ file_path: `/${kind}_${t}_${id}_${l || 'x'}${i}.jpg`, iso_639_1: l, vote_average: 5 + ((i * 7) % 5), vote_count: 10 - i }));
+      body = { posters: mk('p', ['it', 'it', 'en', 'en', 'en', 'ja', 'ja', null, 'fr']), backdrops: mk('b', [null, null, null, 'en', 'it']), logos: [] };
+    } else if ((m = p.match(/^\/tv\/(\d+)\/season\/(\d+)$/))) {
       const id = Number(m[1]); const s = Number(m[2]);
       const d = tvDetails(id); const se = d.seasons.find((x) => x.season_number === s);
       const le = d.last_episode_to_air;

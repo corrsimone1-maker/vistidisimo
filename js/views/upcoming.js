@@ -25,7 +25,7 @@ function nextRow(key, it, m, ne, startLabel) {
   const id = Number(key.split(':')[1]);
   const season = getSeason(id, ne.s, () => repaint());
   const ep = season?.eps?.find((e) => e.n === ne.e);
-  const still = ep?.still ? img(ep.still, 'w300') : (m?.b ? img(m.b, 'w300') : (it.poster || m?.p ? img(it.poster || m.p, 'w185') : ''));
+  const still = ep?.still ? img(ep.still, 'w300') : ((it.backdrop || m?.b) ? img(it.backdrop || m.b, 'w300') : (it.poster || m?.p ? img(it.poster || m.p, 'w185') : ''));
   const left = ne.left - 1;
   return html`<div class="ep-card">
     <a class="ep-still" href="#/t/tv/${id}">${still ? html`<img loading="lazy" src="${still}" alt="">` : ''}<span class="kind-dot ${isAnime(it, m) ? 'is-anime' : ''}"></span></a>

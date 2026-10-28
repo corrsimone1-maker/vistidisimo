@@ -1,6 +1,6 @@
 import { html, raw, icon, img, fmtRating, fmtDay, today, statusLabel, openSheet, confirmSheet, promptSheet, toast, kindBadge, tube, esc } from '../ui.js';
 import { item, metaOf, lib, putMeta, scheduleMetaSave } from '../store.js';
-import { fetchDetails, metaFromDetails, tmdbToken } from '../tmdb.js';
+import { fetchDetails, fetchImages, metaFromDetails, tmdbToken } from '../tmdb.js';
 import { isAnime, isAnimeResult, progress, isWatched, isAired, epRange, watchedCount, airedCount, nextEpisode } from '../derive.js';
 import * as A from '../actions.js';
 import { getSeason } from './upcoming.js';
@@ -99,7 +99,7 @@ export function renderDetail(type, id, rerender) {
   const it = item(key); const m = metaOf(key); const d = cur.d;
   const title = d?.title || d?.name || titleOf(key, it, m);
   const poster = it?.poster || d?.poster_path || m?.p;
-  const backdrop = d?.backdrop_path || m?.b;
+  const backdrop = it?.backdrop || d?.backdrop_path || m?.b;
   const yr = (d?.release_date || d?.first_air_date || '').slice(0, 4) || m?.y || it?.year || '';
   const anime = it ? isAnime(it, m) : (d ? isAnimeResult({ genre_ids: (d.genres || []).map((g) => g.id), original_language: d.original_language, origin_country: d.origin_country }) : isAnime({}, m));
   const genres = (d?.genres || []).slice(0, 3).map((g) => g.name);
@@ -251,13 +251,82 @@ function moreSheet() {
       <button class="${mode === 'yes' ? 'on' : ''}" data-anime="yes">Anime</button>
       <button class="${mode === 'no' ? 'on' : ''}" data-anime="no">Non anime</button>
     </div>` : ''}
+    ${it ? html`<div class="art-btns">
+      <button class="btn ghost" data-art="poster">${icon.image}Cambia copertina</button>
+      <button class="btn ghost" data-art="backdrop">${icon.image}Cambia banner</button>
+    </div>` : ''}
     <a class="btn ghost wide" href="https://www.themoviedb.org/${type}/${id}" target="_blank" rel="noopener">Apri su TMDB</a>
     ${it ? html`<button class="btn danger-ghost wide" data-remove>Rimuovi dalla libreria</button>` : ''}`), {
     onMount: (el, close) => {
+      el.querySelectorAll('[data-art]').forEach((b) => { b.onclick = () => { close(); setTimeout(() => artworkSheet(key, b.dataset.art), 230); }; });
       el.querySelectorAll('[data-anime]').forEach((b) => {
         b.onclick = () => { const v = b.dataset.anime; A.setAnime(key, v === 'auto' ? undefined : v === 'yes'); close(); };
       });
       el.querySelector('[data-remove]')?.addEventListener('click', async () => { close(); await askRemove(key); });
+    },
+  });
+}
+
+// ---------- copertina e banner ----------
+const imagesCache = new Map(); // key -> { posters, backdrops }
+const LANG_ORDER = ['it', 'en', null, 'ja'];
+function langName(l) {
+  if (l == null) return 'Senza testo';
+  const fixed = { it: 'Italiano', en: 'Inglese', ja: 'Giapponese', es: 'Spagnolo', fr: 'Francese', de: 'Tedesco', pt: 'Portoghese', ko: 'Coreano', zh: 'Cinese', ru: 'Russo' };
+  if (fixed[l]) return fixed[l];
+  try { const n = new Intl.DisplayNames(['it'], { type: 'language' }).of(l); return n ? n[0].toUpperCase() + n.slice(1) : l; } catch { return l; }
+}
+
+function artworkSheet(key, kind) {
+  const it = item(key);
+  if (!it) return;
+  const [type, id] = key.split(':');
+  const m = metaOf(key);
+  const isPoster = kind === 'poster';
+  const custom = isPoster ? it.poster : it.backdrop;
+  const current = custom || (isPoster ? (cur.d?.poster_path || m?.p) : (cur.d?.backdrop_path || m?.b));
+  let lang; // lingua selezionata
+  openSheet(String(html`
+    <h3 class="sheet-title">${isPoster ? 'Copertina' : 'Banner'}</h3>
+    <div class="art-body"><p class="muted">Carico le immagini da TMDB…</p></div>
+    ${custom ? html`<button class="btn ghost wide" data-reset>Torna a quella predefinita</button>` : ''}
+    <button class="btn primary wide" data-close>Chiudi</button>`), {
+    className: 'art-sheet',
+    onMount: async (el, close) => {
+      el.querySelector('[data-reset]')?.addEventListener('click', () => { A.setArtwork(key, kind, null); toast(isPoster ? 'Copertina predefinita' : 'Banner predefinito'); close(); });
+      const body = el.querySelector('.art-body');
+      let data = imagesCache.get(key);
+      if (!data) {
+        try { data = await fetchImages(type, Number(id)); imagesCache.set(key, data); } catch (e) { body.innerHTML = String(html`<p class="muted">Non riesco a caricare le immagini (${e.message}).</p>`); return; }
+      }
+      const list = isPoster ? data.posters : data.backdrops;
+      if (!list.length) { body.innerHTML = String(html`<p class="muted">TMDB non ha altre immagini per questo titolo.</p>`); return; }
+      const groups = new Map();
+      for (const x of list) { if (!groups.has(x.l)) groups.set(x.l, []); groups.get(x.l).push(x); }
+      const langs = [...groups.keys()].sort((a, b) => {
+        const ia = LANG_ORDER.indexOf(a); const ib = LANG_ORDER.indexOf(b);
+        if (ia !== -1 || ib !== -1) return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+        return groups.get(b).length - groups.get(a).length;
+      });
+      lang = list.find((x) => x.p === current)?.l;
+      if (lang === undefined || !groups.has(lang)) lang = langs[0];
+      const paint = () => {
+        body.innerHTML = String(html`
+          <div class="chips scroll-x art-langs">
+            ${langs.map((l) => html`<button class="chip ${l === lang ? 'on' : ''}" data-lang="${l ?? ''}">${langName(l)} <span>${groups.get(l).length}</span></button>`)}
+          </div>
+          <div class="art-grid ${isPoster ? 'posters' : 'backdrops'}">
+            ${groups.get(lang).map((x) => html`<button class="art-cell ${x.p === current ? 'on' : ''}" data-path="${x.p}" aria-label="Scegli questa immagine">
+              <img loading="lazy" src="${img(x.p, isPoster ? 'w185' : 'w300')}" alt="">
+              ${x.p === current ? html`<span class="art-check">${icon.check}</span>` : ''}
+            </button>`)}
+          </div>`);
+        body.querySelectorAll('[data-lang]').forEach((b) => { b.onclick = () => { lang = b.dataset.lang || null; paint(); }; });
+        body.querySelectorAll('[data-path]').forEach((b) => {
+          b.onclick = () => { A.setArtwork(key, kind, b.dataset.path); toast(isPoster ? 'Copertina cambiata' : 'Banner cambiato'); close(); };
+        });
+      };
+      paint();
     },
   });
 }

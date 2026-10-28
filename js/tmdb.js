@@ -15,8 +15,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export async function tm(path, params = {}, tokenOverride) {
   const u = new URL(API + path);
-  u.searchParams.set('language', LANG);
-  for (const [k, v] of Object.entries(params)) if (v != null) u.searchParams.set(k, v);
+  // language: assente = italiano; null = nessuna lingua (serve per avere le immagini in tutte le lingue)
+  const lang = params.language === undefined ? LANG : params.language;
+  if (lang) u.searchParams.set('language', lang);
+  for (const [k, v] of Object.entries(params)) if (k !== 'language' && v != null) u.searchParams.set(k, v);
   for (let attempt = 0; attempt < 4; attempt++) {
     let r;
     try {
@@ -77,6 +79,16 @@ export async function fetchDetails(type, id, { overview = false } = {}) {
     if (!d.overview && en?.overview) d.overview = en.overview;
   }
   return d;
+}
+
+// Tutte le copertine e tutti i banner di un titolo, in ogni lingua. I loghi non servono (l'app usa una scritta).
+// Ogni immagine: { p: percorso, l: lingua ISO 639-1 o null (senza testo), v: voto, n: numero di voti }
+export async function fetchImages(type, id) {
+  const d = await tm(`/${type}/${id}/images`, { language: null });
+  const pick = (arr) => (arr || [])
+    .map((x) => ({ p: x.file_path, l: x.iso_639_1 || null, v: x.vote_average || 0, n: x.vote_count || 0 }))
+    .sort((a, b) => b.v - a.v || b.n - a.n);
+  return { posters: pick(d?.posters), backdrops: pick(d?.backdrops) };
 }
 
 export async function fetchSeason(id, n) {

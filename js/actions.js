@@ -93,6 +93,14 @@ export function toggleFav(key, info) {
   dispatch({ op: 'set', key, fields: { fav }, msg: fav ? `${it.title} tra i preferiti` : `${it.title} tolto dai preferiti` });
 }
 
+// Copertina (poster) o banner (backdrop) scelti a mano; path null = torna a quella predefinita di TMDB.
+export function setArtwork(key, kind, path) {
+  const it = item(key);
+  if (!it) return;
+  const field = kind === 'backdrop' ? 'backdrop' : 'poster';
+  dispatch({ op: 'set', key, fields: { [field]: path || undefined }, msg: `${path ? 'Cambia' : 'Ripristina'} ${field === 'poster' ? 'la copertina' : 'il banner'} di ${it.title}` });
+}
+
 export function setAnime(key, v) {
   const it = item(key);
   if (!it) return;

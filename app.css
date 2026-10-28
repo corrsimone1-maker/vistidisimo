@@ -514,6 +514,21 @@ body.no-tabs #toast-root { bottom: calc(var(--safe-b) + 16px); }
 .set-status { margin: 0; font-weight: 700; font-size: 14px; }
 .set-status.bad { color: #ff8299; }
 
+.art-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 14px 0 0; }
+.art-btns .btn { padding: 0 10px; font-size: 13.5px; }
+.art-sheet .art-body { min-height: 120px; }
+.art-sheet .art-langs { margin: 0 -18px 12px; padding: 0 18px; }
+.art-grid { display: grid; gap: 8px; }
+.art-grid.posters { grid-template-columns: repeat(3, 1fr); }
+.art-grid.backdrops { grid-template-columns: 1fr 1fr; }
+.art-cell { position: relative; border-radius: 9px; overflow: hidden; background: var(--velluto-2); }
+.art-grid.posters .art-cell { aspect-ratio: 2 / 3; }
+.art-grid.backdrops .art-cell { aspect-ratio: 16 / 9; }
+.art-cell img { width: 100%; height: 100%; object-fit: cover; }
+.art-cell.on { box-shadow: 0 0 0 3px var(--lilla), 0 0 16px rgba(201, 179, 255, .5); }
+.art-check { position: absolute; right: 6px; bottom: 6px; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--lilla); color: var(--notte); }
+.art-check svg { width: 15px; height: 15px; }
+
 .rescue { margin: 40px var(--gut) 0; padding: 20px; border-radius: 18px; background: var(--velluto); }
 .rescue h1 { margin: 0 0 10px; font: 650 20px/1.2 var(--f-disp); letter-spacing: -.02em; }
 .rescue p { color: var(--testo-2); font-size: 14.5px; }

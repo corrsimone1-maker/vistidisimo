@@ -4,7 +4,7 @@ import { tm, tmdbToken } from '../tmdb.js';
 import { OWNER, DATA_REPO, serialize } from '../github.js';
 import { watchedCount, isAnime } from '../derive.js';
 
-export const VERSION = '12';
+export const VERSION = '13';
 let busy = false;
 let note = '';
 

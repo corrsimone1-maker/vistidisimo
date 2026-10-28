@@ -35,6 +35,7 @@ export const icon = {
   x: svg('<path d="M6 6l12 12M18 6 6 18"/>', 'stroke-width="2.2"'),
   chevron: svg('<path d="m6.5 9.5 5.5 5.5 5.5-5.5"/>', 'stroke-width="2.2"'),
   list: svg('<path d="M8.5 6.5H20M8.5 12H20M8.5 17.5H20"/><circle cx="4.6" cy="6.5" r="1" fill="currentColor"/><circle cx="4.6" cy="12" r="1" fill="currentColor"/><circle cx="4.6" cy="17.5" r="1" fill="currentColor"/>'),
+  image: svg('<rect x="3.2" y="4.2" width="17.6" height="15.6" rx="2.4"/><circle cx="9" cy="9.6" r="1.7"/><path d="m4 17.6 5.2-4.8 3.6 3.2 2.6-2.2 4.6 4"/>'),
   grip: svg('<path d="M5 8.5h14M5 12h14M5 15.5h14"/>', 'stroke-width="2"'),
   replay: svg('<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.2 4.2v4h4"/>'),
 };
