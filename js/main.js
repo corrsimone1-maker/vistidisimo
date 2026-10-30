@@ -1,10 +1,9 @@
-import { closeAllSheets, toast } from './ui.js';
+import { closeAllSheets } from './ui.js';
 import { S, subscribe, loadCache, pull, flush, refreshMeta, hasGhToken, saveMeta } from './store.js';
-import * as A from './actions.js';
 import { renderHome, renderCollection } from './views/home.js';
 import { renderLibrary, libraryActions, libraryInputs } from './views/library.js';
 import { renderSearch, searchInputs, searchActions } from './views/search.js';
-import { renderUpcoming, upcomingActions } from './views/upcoming.js';
+import { renderUpcoming, upcomingActions, resetUpcomingOrder } from './views/upcoming.js';
 import { renderDetail, detailActions } from './views/detail.js';
 import { renderEpisode, renderRipasso, episodeActions } from './views/episode.js';
 import { renderPerson } from './views/person.js';
@@ -97,7 +96,11 @@ function isHistoryReturn() {
   return false;
 }
 
+// tornando su Prossimi da un'altra scheda della barra l'ordine si rifà da capo
+const OTHER_TABS = new Set(['home', 'raccolta', 'liste', 'lista', 'impostazioni', 'libreria', 'cerca']);
+
 function onHash() {
+  if (OTHER_TABS.has(parse(location.hash).name)) resetUpcomingOrder();
   scrollMem.set(currentHash, window.scrollY);
   const hs = {};
   view.querySelectorAll('[data-scroll]').forEach((el) => { hs[el.dataset.scroll] = el.scrollLeft; });
@@ -121,12 +124,6 @@ const back = () => { if (navDepth > 0 && history.length > 1) { navDepth -= 2; hi
 const ACTIONS = {
   ...libraryActions, ...searchActions, ...upcomingActions, ...detailActions, ...episodeActions, ...listActions, ...settingsActions,
   back: () => back(),
-  'up-check': (el) => {
-    const key = el.dataset.key; const s = Number(el.dataset.s); const e = Number(el.dataset.e);
-    el.classList.add('done');
-    A.markEpisodes(key, [[s, e]]);
-    toast(`Visto S${s} · E${e}`);
-  },
 };
 const INPUTS = { ...libraryInputs, ...searchInputs };
 

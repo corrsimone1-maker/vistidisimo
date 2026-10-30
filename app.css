@@ -339,7 +339,20 @@ svg { width: 22px; height: 22px; flex: none; }
 .seg.small { margin: 0 0 14px; }
 .seg.small button { font-size: 12.5px; height: auto; min-height: 34px; padding: 4px 6px; line-height: 1.2; }
 .ep-list { display: flex; flex-direction: column; gap: 10px; padding: 0 var(--gut); }
-.ep-card { display: grid; grid-template-columns: 112px 1fr auto; align-items: center; gap: 12px; padding: 8px; border-radius: 14px; background: var(--velluto); }
+.ep-card { display: grid; grid-template-columns: 112px 1fr auto; align-items: center; gap: 12px; padding: 8px; border-radius: 14px; background: var(--velluto); overflow: hidden; }
+/* animazioni del cerchio in Prossimi (--ad: ritardo negativo per riprendere dopo un ridisegno) */
+@keyframes epIn { from { opacity: 0; transform: translateX(44px); } to { opacity: 1; transform: none; } }
+@keyframes epInBack { from { opacity: 0; transform: translateX(-44px); } to { opacity: 1; transform: none; } }
+@keyframes ckIn { from { opacity: 0; transform: scale(.55); } to { opacity: 1; transform: none; } }
+@keyframes epAppear {
+  from { opacity: 0; transform: translateX(44px); max-height: 0; padding-top: 0; padding-bottom: 0; margin-bottom: -10px; }
+  55% { opacity: 0; transform: translateX(44px); max-height: 140px; padding-top: 8px; padding-bottom: 8px; margin-bottom: 0; }
+  to { opacity: 1; transform: none; max-height: 140px; padding-top: 8px; padding-bottom: 8px; margin-bottom: 0; }
+}
+.ep-card.anim-next :is(.ep-still, .ep-body) { animation: epIn .32s cubic-bezier(.2, .8, .2, 1) var(--ad, 0ms) both; }
+.ep-card.anim-back :is(.ep-still, .ep-body) { animation: epInBack .32s cubic-bezier(.2, .8, .2, 1) var(--ad, 0ms) both; }
+.ep-card:is(.anim-next, .anim-back) .check-btn { animation: ckIn .32s cubic-bezier(.3, 1.4, .5, 1) var(--ad, 0ms) both; }
+.ep-card.anim-appear { animation: epAppear .42s cubic-bezier(.2, .8, .2, 1) var(--ad, 0ms) both; }
 .ep-still { position: relative; aspect-ratio: 16 / 9; border-radius: 9px; overflow: hidden; background: var(--velluto-2); }
 .ep-still img { width: 100%; height: 100%; object-fit: cover; }
 .kind-dot.is-anime { position: absolute; top: 5px; left: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--rosa); box-shadow: 0 0 6px var(--rosa); }
