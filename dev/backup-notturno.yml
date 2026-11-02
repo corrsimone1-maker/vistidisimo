@@ -1,0 +1,135 @@
+# Backup di vistidisimo: ogni notte copia library.json da vistidisimo-dati in questa repo.
+# Ogni giorno in cui la libreria cambia diventa un commit: qui c'è ogni versione, al sicuro (il token dell'app
+# vale solo per vistidisimo-dati; questo usa DATI_TOKEN, in sola lettura).
+# Se la libreria scaricata non è valida o è crollata (almeno 5 titoli e il 10% in meno, o almeno 50 episodi
+# visti e il 10% in meno) NON la salva e apre una issue: l'ultima versione buona resta in cima.
+#
+# Cosa fare quando…
+# - vuoi una versione vecchia: library.json → History → scegli il giorno → Raw;
+# - hai tolto tu tanti titoli e il backup si è fermato: Actions → Backup di vistidisimo → Run workflow,
+#   spunta «Accetta…», poi chiudi la issue;
+# - il token è scaduto (la issue dice 401): rifallo uguale (solo vistidisimo-dati, Contents in sola lettura) e
+#   aggiornalo in Settings → Secrets and variables → Actions → DATI_TOKEN, poi Run workflow.
+name: Backup di vistidisimo
+
+on:
+  schedule:
+    - cron: '23 1 * * *'   # ogni notte verso le 2:23 in Italia (3:23 con l'ora legale); GitHub a volte ritarda
+  push:
+    branches: [main]
+    paths: ['.github/workflows/backup.yml']   # appena salvi (o cambi) questo file parte una prima copia
+  workflow_dispatch:
+    inputs:
+      accetta:
+        description: 'Accetta un calo grande di titoli o episodi (solo se li hai tolti tu)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  copia:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Prendi questa repo
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: git clone -q --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" repo
+
+      - name: Scarica library.json da vistidisimo-dati (token in sola lettura)
+        working-directory: repo
+        env:
+          TOKEN: ${{ secrets.DATI_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$TOKEN" ]; then echo "::error::Manca il secret DATI_TOKEN"; exit 1; fi
+          curl -fsS --retry 3 --retry-delay 15 \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github.raw+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -o nuovo.json \
+            "https://api.github.com/repos/corrsimone1-maker/vistidisimo-dati/contents/library.json?ref=main"
+
+      - name: Controlla che sia sana
+        working-directory: repo
+        env:
+          ACCETTA: ${{ inputs.accetta && 'si' || 'no' }}
+        run: |
+          python3 - nuovo.json library.json <<'PY'
+          import json, os, sys
+
+          def leggi(percorso):
+              with open(percorso, encoding='utf-8') as f:
+                  doc = json.load(f)
+              if not isinstance(doc, dict) or not isinstance(doc.get('items'), dict) or not isinstance(doc.get('lists', []), list):
+                  raise ValueError('non ha la forma di library.json (items, lists)')
+              episodi = 0
+              for it in doc['items'].values():
+                  if not isinstance(it, dict) or it.get('type') not in ('tv', 'movie'):
+                      raise ValueError('una voce di items non è una serie o un film')
+                  for ep in (it.get('eps') or {}).values():
+                      episodi += len(ep)
+              return len(doc['items']), episodi, len(doc.get('lists', []))
+
+          def calo(prima, dopo, minimo):
+              return prima - dopo >= minimo and prima - dopo >= 0.1 * prima
+
+          nuovo, vecchio = sys.argv[1], sys.argv[2]
+          try:
+              t, e, l = leggi(nuovo)
+          except Exception as err:
+              print(f'::error::La libreria scaricata non è valida: {err}')
+              sys.exit(1)
+          riassunto = f'{t} titoli, {e} episodi visti, {l} liste'
+          allarme = []
+          if os.path.exists(vecchio):
+              try:
+                  t0, e0, l0 = leggi(vecchio)
+                  riassunto += f' (prima {t0} titoli, {e0} episodi, {l0} liste)'
+                  if calo(t0, t, 5):
+                      allarme.append(f'titoli da {t0} a {t}')
+                  if calo(e0, e, 50):
+                      allarme.append(f'episodi visti da {e0} a {e}')
+              except Exception:
+                  pass
+          print(riassunto)
+          with open('riassunto.txt', 'w', encoding='utf-8') as f:
+              f.write(riassunto + '\n')
+          if allarme and os.environ.get('ACCETTA') != 'si':
+              print('::error::Calo grande, backup fermo per non coprire la versione buona: ' + '; '.join(allarme)
+                    + '. Se li hai tolti tu: Actions → Backup di vistidisimo → Run workflow con «Accetta…».')
+              sys.exit(1)
+          if allarme:
+              print('Calo grande accettato a mano: ' + '; '.join(allarme))
+          PY
+
+      - name: Salva
+        working-directory: repo
+        run: |
+          set -euo pipefail
+          mv nuovo.json library.json
+          git config user.name "backup di vistidisimo"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add library.json
+          if git diff --cached --quiet; then echo "Nessuna modifica dall'ultimo backup."; exit 0; fi
+          git commit -q -m "Backup del $(TZ=Europe/Rome date +%Y-%m-%d)" -m "$(cat riassunto.txt)"
+          git push -q
+
+      - name: Se qualcosa non va, apri (o aggiorna) una issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LINK: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          titolo="Backup di vistidisimo non riuscito"
+          corpo="Il backup del $(TZ=Europe/Rome date +%d/%m/%Y) non è andato. Dettagli: $LINK"
+          n=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title \"$titolo\"" --json number --jq '.[0].number // empty')
+          if [ -n "$n" ]; then gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "$corpo"
+          else gh issue create --repo "$GITHUB_REPOSITORY" --title "$titolo" --body "$corpo"; fi
