@@ -17,16 +17,17 @@ HTML/CSS/JS statici, moduli ES senza build né dipendenze. Niente framework.
 | `js/main.js` | router a hash, ridisegno delle schermate, delega degli eventi (`data-act`, `data-input`), avvio |
 | `js/store.js` | stato, coda delle operazioni, sincronizzazione con GitHub, cache TMDB (`meta.json`), correzione numerazione episodi |
 | `js/github.js` | API Contents di GitHub (`ghGet`/`ghPut`), `serialize` (una voce per riga). **`OWNER` e `DATA_REPO` sono scritti qui** |
-| `js/tmdb.js` | API TMDB (lingua `it-IT`), `metaFromDetails`, `fetchSeason`, `pool` (max 6 richieste insieme) |
+| `js/tmdb.js` | API TMDB (lingua `it-IT`), `metaFromDetails`, `fetchSeason`, `fetchCollection` (saghe), `fetchTrailer`, `searchTmdb`, `pool` (max 6 richieste insieme) |
+| `js/anilist.js` | AniList (GraphQL pubblico, senza chiave): film, OVA e speciali di un anime e il loro collegamento a TMDB |
 | `js/derive.js` | avanzamento, stato automatico, prossimo episodio, anime, statistiche, % liste |
 | `js/actions.js` | azioni utente → operazioni |
 | `js/export.js` | esportazione per altre app: CSV di Letterboxd (film) e di Simkl (tutto) |
 | `js/ui.js` | template `html` con escape, icone SVG, locandina (`posterCard`), fogli dal basso, avvisi, date |
-| `js/views/*.js` | schermate: `home`, `library`, `search`, `upcoming` (Prossimi), `detail`, `episode` (scheda episodio e Ripasso), `person` (film di un regista), `lists`, `settings`; `menu` = menu ≡ della Libreria (fogli, nessuna rotta); `newseason` = finestra «Nuova stagione» (nessuna rotta) |
+| `js/views/*.js` | schermate: `home`, `library`, `search`, `upcoming` (Prossimi), `detail`, `episode` (scheda episodio e Ripasso), `person` (film di un regista), `lists`, `settings`; `menu` = menu ≡ della Libreria (fogli, nessuna rotta); `newseason` = finestra «Nuova stagione» (nessuna rotta); `saga` (pagina di una saga ed elenco delle saghe); `franchise` (film e OVA di un anime) |
 | `sw.js` | service worker: rete prima, cache solo come ripiego offline |
 | `dev/` | prove con Playwright e API finte (vedi sotto). Non fa parte dell'app |
 
-Rotte: `#/home`, `#/raccolta/<serie|film|serie-preferite|film-preferiti>`, `#/libreria`, `#/cerca`, `#/prossimi`, `#/t/<tv|movie>/<id>`, `#/ep/<idSerie>/<stagione>/<episodio>`, `#/ripasso/<idSerie>[/<stagione>]`, `#/persona/<idTMDB>`, `#/liste`, `#/lista/<id>`, `#/impostazioni`. Le schede (titolo, episodio, ripasso, regista) ritrovano lo scroll solo quando ci torni con indietro/avanti della cronologia, non quando le riapri da un link: ogni voce nuova riceve un numero in `history.state` (`isHistoryReturn` in `main.js`, con `history.scrollRestoration = 'manual'`); le schede principali (Home, Libreria, Cerca, Prossimi, Liste) tengono sempre lo scroll (`KEEP_SCROLL`); i dettagli TMDB dei titoli aperti restano in memoria per la sessione (`seenDetails` in `detail.js`), così tornando la pagina è subito completa.
+Rotte: `#/home`, `#/raccolta/<serie|film|serie-preferite|film-preferiti>`, `#/libreria`, `#/cerca`, `#/prossimi`, `#/t/<tv|movie>/<id>`, `#/ep/<idSerie>/<stagione>/<episodio>`, `#/ripasso/<idSerie>[/<stagione>]`, `#/persona/<idTMDB>`, `#/saga/<idCollezione>`, `#/saghe`, `#/extra/<idSerie>` (film e OVA di un anime), `#/liste`, `#/lista/<id>`, `#/impostazioni`. Le schede (titolo, episodio, ripasso, regista) ritrovano lo scroll solo quando ci torni con indietro/avanti della cronologia, non quando le riapri da un link: ogni voce nuova riceve un numero in `history.state` (`isHistoryReturn` in `main.js`, con `history.scrollRestoration = 'manual'`); le schede principali (Home, Libreria, Cerca, Prossimi, Liste) tengono sempre lo scroll (`KEEP_SCROLL`); i dettagli TMDB dei titoli aperti restano in memoria per la sessione (`seenDetails` in `detail.js`), così tornando la pagina è subito completa.
 
 ### Sincronizzazione (non romperla)
 - Ogni azione è un'**operazione** (`add`, `set`, `del`, `eps`, `rw`, `pause`, `ann`, `lnew`, `lset`, `ldel`, `ladd`, `lrem`, `lorder`) messa in coda in `localStorage` (`vds.ops`). La libreria mostrata = ultima versione scaricata (`vds.base`) + operazioni in coda.
@@ -61,6 +62,24 @@ Chiave `tipo:idTMDB` (`tv:48866`, `movie:129`). Stati: `planned` da guardare, `w
 - Chiudendo la finestra (Ok, tocco fuori o apertura di una serie) tutte le stagioni mostrate si segnano con l'operazione `ann` → campo **`announced`** dell'item (= ultima stagione annunciata). `ann` tiene il **massimo**, così un avviso vecchio da un altro dispositivo non lo abbassa. Sta in `library.json`, quindi la finestra si vede una volta sola su iPhone, iPad e Mac.
 - Con un foglio aperto o l'app in background la finestra aspetta (riprova ogni 1,5 s); durante la prima costruzione di `meta.json` non parte.
 - Nelle prove `makeMocks` segna di base ogni serie come già annunciata (`announced: 999`), così la finestra non copre le altre prove anche se i dati veri hanno una stagione appena uscita; `prova-stagioni.js` passa `newSeasons: true`.
+
+**Saghe** (2/11/2026, chieste da Simo): le collezioni di TMDB.
+- `meta.json` ha per ogni film `co: [idCollezione, nome]`, oppure `0` se non ha saga. I film scaricati prima (senza `co`) si riscaricano **una volta** (`needsRefresh` in `store.js`); in `meta.json` possono restare titoli tolti dalla libreria che non si aggiornano più: non contano.
+- Nella pagina del film, fatto **«Saga»** (nome senza «- Collezione», `sagaName`) → `#/saga/<id>`: tutti i film della saga **in ordine di uscita** (quelli senza data in fondo), con anno sotto, stato per quelli in libreria, «N visti su M» dove M conta solo i film **già usciti** («· 1 in uscita»).
+- **Elenco delle saghe**: menu ≡ della Libreria → «Saghe» → `#/saghe` (la scheda accesa resta Libreria): le saghe dei film in libreria come le carte delle liste (mosaico, «2 di 3», percentuale e barra rosa); prima quelle a metà, poi le finite, poi quelle mai iniziate, dentro dall'ultima vista.
+- Le collezioni si tengono sul telefono 7 giorni (`vds.sagas`), 4 richieste per volta.
+
+**Film e OVA degli anime** (2/11/2026, per non perdersi niente): nella pagina di una **serie anime** la riga «Film e OVA N/M» (scorre in orizzontale) e «Tutti» → `#/extra/<idSerie>` con la griglia. Da **AniList** (`js/anilist.js`), perché TMDB non collega una serie ai suoi film:
+- si cerca la serie su AniList col titolo originale (poi italiano) e l'anno della prima puntata (±1);
+- si seguono le relazioni `SEQUEL`, `PREQUEL`, `PARENT`, `SIDE_STORY` (e si mostrano senza seguirle `SPIN_OFF`, `SUMMARY`, `COMPILATION`, `ALTERNATIVE`); le **serie TV** collegate si allargano solo se su TMDB sono **questa stessa serie** (una stagione divisa su AniList): così da Naruto Shippuden non si entra in Naruto o Boruto, ma i film legati direttamente (anche The Last → Boruto: il film) restano;
+- si mostrano film, OVA, ONA, speciali e corti (`SHOW`), in ordine di uscita, con «Film · 2009», «OVA · 2010»…;
+- ognuno si collega a TMDB cercando il titolo giapponese, inglese o romaji: solo animazione, titolo simile (Dice sulle coppie di lettere ≥ 0,6) e anno ±1. Se c'è si apre nell'app col titolo italiano e il tuo stato; se no (molti OVA su TMDB stanno negli speciali della serie) la carta mostra la copertina di AniList e apre **anilist.co fuori dall'app**;
+- AniList permette circa 30 richieste al minuto (oggi è «degradato»): l'elenco di ogni serie resta sul telefono 7 giorni (`vds.al.fr`, ultime 60 serie), i collegamenti a TMDB 120 giorni (non trovati 14) in `vds.al.map`. Con un errore (anche 429) la riga semplicemente non c'è e «Tutti» dice cosa è successo; non si riprova fino alla prossima apertura dell'app.
+- `img()` in `ui.js` accetta anche un indirizzo intero (copertine di AniList); `posterCard` con `ext: true` apre il link fuori dall'app (`target=_blank`).
+
+**Mancano** (2/11/2026): nella pagina di una serie **in corso o da guardare**, fatto «Mancano: 4 episodi · 1 h 36 min» = episodi usciti e non visti (`unwatchedAired`) × durata media (`episode_run_time`, `rt`, se no 24 per gli anime e 42 per le altre); oltre le 3 ore si arrotonda ai 10 minuti.
+
+**Trailer** (2/11/2026): sotto i chip del titolo, tasto rosa **«▶ Trailer»** se TMDB ne ha uno su YouTube (`fetchTrailer`: prima `it-IT`, poi `en-US`; trailer prima dei teaser, ufficiali prima, il più recente: per una serie di solito quello dell'ultima stagione). Si apre in un foglio con il video incorporato (`youtube-nocookie.com/embed`, `playsinline`, `referrerpolicy` per evitare l'errore 153) e «Apri su YouTube». L'iframe è un altro sito: non può leggere la memoria dell'app, quindi non contrasta con «niente script da altri siti».
 
 **Date**: tutte `YYYY-MM-DD` (l'app scrive `today()`); 82 episodi e 6 film importati con l'ora sono stati ripuliti il 28/10/2026.
 
@@ -127,6 +146,7 @@ node prova-export.js /percorso/screenshot                # export Letterboxd e S
 node prova-prossimi.js /percorso/screenshot              # animazione del cerchio in Da vedere (fotogrammi pr-*.png), Annulla, scheda che si chiude, Da iniziare, movimento ridotto
 node prova-sospesi.js /percorso/screenshot               # menu ≡ e «dove mi sono fermato»: minutaggio, serie/film/anime assoluto, pallini, «Fermo a», pulizia automatica, reset, ricarica
 node prova-sicurezza.js /percorso/screenshot             # modulo dei token per Password di Apple, Invio senza ricaricare, niente commit inutile di config.json, ripiego w780→original, nessun gestore inline
+node prova-saghe.js /percorso/screenshot                 # saghe (co in meta.json, pagina, elenco dal menu ≡), film e OVA di Naruto Shippuden da un AniList finto (senza allargarsi a Naruto e Boruto, cache, 429), «Mancano», trailer
 node prova-stagioni.js /percorso/screenshot              # finestra «Nuova stagione»: casi limite di newSeason, più serie / una sola, Ok, Apri, tocco fuori, announced su GitHub (mai abbassato), altro dispositivo, attesa con un foglio aperto
 ```
 `prova-sospesi.js` è scritta sui dati veri di fine ottobre 2026 (The 100 in corso a S2E5, un solo titolo con «naru»): con i dati del 2/11/2026 (The 100 completata, tre Naruto) 9 verifiche falliscono anche senza nessuna modifica all'app. Va riscritta con dati fissi prima di fidarsene.

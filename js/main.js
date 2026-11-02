@@ -10,11 +10,15 @@ import { renderPerson } from './views/person.js';
 import { renderLists, renderList, listActions, initReorder } from './views/lists.js';
 import { renderSettings, settingsActions } from './views/settings.js';
 import { checkNewSeasons } from './views/newseason.js';
+import { renderSaga, renderSagas } from './views/saga.js';
+import { renderFranchise } from './views/franchise.js';
 
 const view = document.getElementById('view');
 const scrollMem = new Map();
-const TAB_OF = { home: 'home', raccolta: 'home', liste: 'home', lista: 'home', impostazioni: 'home', libreria: 'libreria', cerca: 'cerca', prossimi: 'prossimi' };
-const KEEP_SCROLL = new Set(['home', 'raccolta', 'liste', 'lista', 'libreria', 'cerca', 'prossimi']);
+const TAB_OF = { home: 'home', raccolta: 'home', liste: 'home', lista: 'home', impostazioni: 'home', libreria: 'libreria', saghe: 'libreria', cerca: 'cerca', prossimi: 'prossimi' };
+// schede di dettaglio: restano sulla scheda della barra da cui le hai aperte
+const DETAIL = new Set(['t', 'ep', 'ripasso', 'persona', 'saga', 'extra']);
+const KEEP_SCROLL = new Set(['home', 'raccolta', 'liste', 'lista', 'libreria', 'saghe', 'cerca', 'prossimi']);
 let lastTab = 'home';
 let navDepth = 0;
 let currentHash = location.hash;
@@ -38,6 +42,9 @@ function renderRoute() {
     case 't': out = renderDetail(r.parts[1] === 'movie' ? 'movie' : 'tv', Number(r.parts[2]), rerender); break;
     case 'ep': out = renderEpisode(Number(r.parts[1]), Number(r.parts[2]), Number(r.parts[3]), rerender); break;
     case 'persona': out = renderPerson(Number(r.parts[1]), rerender); break;
+    case 'saga': out = renderSaga(Number(r.parts[1]), rerender); break;
+    case 'saghe': out = renderSagas(rerender); break;
+    case 'extra': out = renderFranchise(Number(r.parts[1]), rerender); break;
     case 'ripasso': out = renderRipasso(Number(r.parts[1]), r.parts[2] == null ? null : Number(r.parts[2]), rerender); break;
     case 'liste': out = renderLists(); break;
     case 'lista': out = renderList(decodeURIComponent(r.parts[1] || '')); break;
@@ -46,7 +53,7 @@ function renderRoute() {
   }
   view.innerHTML = String(out);
   view.dataset.route = r.name;
-  const tab = (r.name === 't' || r.name === 'ep' || r.name === 'ripasso' || r.name === 'persona') ? lastTab : (TAB_OF[r.name] || 'home');
+  const tab = DETAIL.has(r.name) ? lastTab : (TAB_OF[r.name] || 'home');
   lastTab = tab;
   document.querySelectorAll('#tabs a').forEach((a) => {
     const on = a.dataset.tab === tab;
@@ -98,7 +105,7 @@ function isHistoryReturn() {
 }
 
 // tornando su Prossimi da un'altra scheda della barra l'ordine si rifà da capo
-const OTHER_TABS = new Set(['home', 'raccolta', 'liste', 'lista', 'impostazioni', 'libreria', 'cerca']);
+const OTHER_TABS = new Set(['home', 'raccolta', 'liste', 'lista', 'impostazioni', 'libreria', 'saghe', 'cerca']);
 
 function onHash() {
   if (OTHER_TABS.has(parse(location.hash).name)) resetUpcomingOrder();

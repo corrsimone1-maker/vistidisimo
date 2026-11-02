@@ -1,5 +1,6 @@
-// Menu ≡ in alto a destra nella Libreria. Per ora: «Segna dove mi sono fermato» (titolo → episodio →
-// minuto) e i titoli lasciati a metà, ognuno con la × per toglierlo. Le voci nuove si aggiungono qui.
+// Menu ≡ in alto a destra nella Libreria: «Segna dove mi sono fermato» (titolo → episodio →
+// minuto), «Saghe» (porta a #/saghe) e i titoli lasciati a metà, ognuno con la × per toglierlo. Le voci
+// nuove si aggiungono qui.
 import { html, icon, img, openSheet, toast, fmtClock, parseClock, statusLabel } from '../ui.js';
 import { lib, item, metaOf } from '../store.js';
 import { seasons, epRange, isWatched, isAired, nextEpisode, byLast, isAnime } from '../derive.js';
@@ -84,6 +85,7 @@ function pauseSheet(start) {
         root.innerHTML = String(html`
           <div class="opt-list">
             <button class="opt act-opt" data-m="pick">${icon.bookmark}Segna dove mi sono fermato</button>
+            <button class="opt act-opt" data-m="saghe">${icon.saga}Saghe</button>
           </div>
           ${list.length ? html`
             <p class="sheet-label pz-label"><i></i>In sospeso</p>
@@ -231,6 +233,7 @@ function pauseSheet(start) {
         const k = b.dataset.k;
         switch (b.dataset.m) {
           case 'menu': go('menu'); break;
+          case 'saghe': close(); location.hash = '#/saghe'; break;
           case 'pick': go('pick', { q: '' }); break;
           case 'edit': startEdit(k, 'menu'); break;
           case 'choose': startEdit(k, 'pick'); break;

@@ -41,11 +41,14 @@ export const icon = {
   minus: svg('<path d="M5 12h14"/>', 'stroke-width="2.2"'),
   eye: svg('<path d="M2.8 12s3.4-6.2 9.2-6.2 9.2 6.2 9.2 6.2-3.4 6.2-9.2 6.2S2.8 12 2.8 12z"/><circle cx="12" cy="12" r="2.8"/>'),
   menu: svg('<path d="M4 6.8h16M4 12h16M4 17.2h16"/>', 'stroke-width="2"'),
+  saga: svg('<rect x="7.6" y="3.4" width="10.8" height="14.2" rx="1.8"/><path d="M5.2 6.2v12.6a1.8 1.8 0 0 0 1.8 1.8h9.6"/>'),
+  play: svg('<path d="M8 5.4v13.2L18.6 12z" fill="currentColor"/>'),
   bookmark: svg('<path d="M6.6 3.6h10.8v16.8L12 16.6l-5.4 3.8z"/><path d="M10 8.4v4.2M14 8.4v4.2"/>'),
 };
 
 export const IMG = 'https://image.tmdb.org/t/p/';
-export const img = (path, size = 'w342') => (path ? IMG + size + path : '');
+// percorso TMDB ("/abc.jpg") oppure indirizzo intero (copertine di AniList)
+export const img = (path, size = 'w342') => (path ? (/^https:\/\//.test(path) ? path : IMG + size + path) : '');
 
 export const STATUS = {
   planned: { label: 'Da guardare', short: 'Da guardare' },
@@ -75,8 +78,9 @@ export function fmtRating(r) { return r == null ? '' : Number(r).toFixed(1); }
 // Una locandina: immagine, iconcina film/serie, voto e tubo di stato sotto.
 // paused: pallino rosso in alto a destra (episodio o film lasciato a metà).
 export function posterCard(c) {
-  // c: { href, title, poster, kind, status, progress, rating, extra, removable, key, paused }
-  return html`<a class="pc" href="${c.href}" ${c.key ? raw(`data-key="${esc(c.key)}"`) : ''}>
+  // c: { href, title, poster, kind, status, progress, rating, extra, removable, key, paused, ext }
+  // ext: link a un altro sito (si apre fuori dall'app)
+  return html`<a class="pc" href="${c.href}" ${c.key ? raw(`data-key="${esc(c.key)}"`) : ''} ${c.ext ? raw('target="_blank" rel="noopener"') : ''}>
     <div class="pc-img">
       ${c.poster ? html`<img loading="lazy" decoding="async" src="${img(c.poster)}" alt="">` : html`<div class="pc-ph"><span>${c.title}</span></div>`}
       ${kindBadge(c.kind)}

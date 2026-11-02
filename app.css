@@ -632,6 +632,18 @@ body:has(#sheet-root .sheet-wrap.in) #toast-root { bottom: auto; top: calc(var(-
 .person-count b { color: var(--testo); font-family: var(--f-disp); }
 .pc-year { display: block; margin-top: 1px; font: 600 11.5px var(--f-disp); color: var(--testo-3); }
 
+/* ---------- film e OVA degli anime, trailer ---------- */
+.d-fr { margin: 26px 0 0; }
+.fr-count { margin-left: 5px; color: var(--testo-3); font: 600 13px var(--f-disp); }
+.trailer-btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 30px; margin-top: 10px; padding: 0 12px 0 10px; border-radius: 9px;
+  background: rgba(255, 95, 210, .12); color: var(--rosa); font-weight: 800; font-size: 13px;
+  box-shadow: 0 0 0 1px rgba(255, 95, 210, .4), 0 0 14px rgba(255, 95, 210, .18);
+}
+.trailer-btn svg { width: 13px; height: 13px; }
+.tr-frame { position: relative; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: #000; }
+.tr-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+
 /* ---------- ripasso ---------- */
 .rp-show { display: block; margin: -8px var(--gut) 0; font-weight: 800; font-size: 14px; color: var(--lilla); }
 .rp-intro { margin: 6px var(--gut) 14px; color: var(--testo-2); font-size: 13.5px; font-weight: 600; }

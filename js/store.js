@@ -277,6 +277,8 @@ function needsRefresh(key, it, m, now) {
     if (it && it.status === 'dropped') return age > 7 * 24 * H;
     return age > 12 * H;
   }
+  // film scaricati prima delle saghe (2/11/2026): si riscaricano una volta per sapere la saga
+  if (m.co === undefined) return true;
   if (m.rd && m.rd > today()) return age > 3 * 24 * H;
   return age > 60 * 24 * H;
 }

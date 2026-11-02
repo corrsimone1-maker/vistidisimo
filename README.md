@@ -19,6 +19,10 @@ Le serie e i film che ho visto. Web app personale (GitHub Pages) che sostituisce
 - **Episodio**: tocca il titolo di un episodio per trama (italiano, se manca inglese, se manca spagnolo), tutti i fotogrammi di TMDB e quante volte l'hai visto. Se non l'hai ancora visto, trama e immagini restano velate finché non tocchi.
 - **Ripasso**: gli episodi già visti di una stagione, uno dopo l'altro con immagine e trama, per ricordarsi dove eravamo rimasti. Dopo una pausa lunga la pagina della serie lo propone da sola.
 - **Registi**: nella pagina di un film tocca il nome del regista per vedere tutti i suoi film, dal più recente, senza cortometraggi, con quelli che hai già visto.
+- **Saghe**: nella pagina di un film tocca la saga per vedere tutti i suoi film in ordine di uscita; dal menu ≡ della Libreria, «Saghe» elenca quelle dei tuoi film con la percentuale vista.
+- **Film e OVA** degli anime: nella pagina di una serie anime, i suoi film, OVA e speciali in ordine di uscita (da [AniList](https://anilist.co)), con quelli che hai già visto.
+- **Nuova stagione**: quando esce una stagione nuova di una serie che segui, all'apertura compare una finestra (una volta sola).
+- **Mancano** e **Trailer**: nella pagina di una serie quanti episodi e quanto tempo mancano; il trailer di TMDB, se c'è.
 - **Esporta per altre app** (Impostazioni): film per Letterboxd, tutto per Simkl. Il backup completo resta `library.json`.
 - **Rivisioni**: quante volte hai rivisto un film, una serie intera, una stagione o un singolo episodio.
 
@@ -30,9 +34,10 @@ La barra sotto ogni locandina si riempie con l'avanzamento e ha il colore dello 
 - `js/store.js` — stato, coda delle modifiche, sincronizzazione con GitHub, cache TMDB
 - `js/derive.js` — avanzamento, stato automatico, prossimo episodio, statistiche
 - `js/actions.js` — azioni dell'utente
+- `js/tmdb.js`, `js/anilist.js` — TMDB e AniList
 - `js/views/` — le schermate
 - `sw.js`, `manifest.webmanifest`, `icons/` — installazione sulla schermata Home
 - `dev/` — prove automatiche con API finte (non fanno parte dell'app)
 - `CLAUDE.md` — istruzioni per Claude, per lavorarci da altre chat
 
-Font: Unbounded e Manrope (SIL Open Font License). Dati e immagini da TMDB: questa app usa l'API di TMDB ma non è approvata né certificata da TMDB.
+Font: Unbounded e Manrope (SIL Open Font License). Dati e immagini da TMDB: questa app usa l'API di TMDB ma non è approvata né certificata da TMDB. Film e OVA degli anime da AniList.

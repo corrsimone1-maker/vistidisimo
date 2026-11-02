@@ -48,7 +48,10 @@ export function metaFromDetails(type, d) {
       t: d.title, ot: d.original_title, y: year(d.release_date), p: d.poster_path || null, b: d.backdrop_path || null,
       g: (d.genres || []).map((g) => g.id), l: d.original_language,
       c: d.origin_country?.length ? d.origin_country : (d.production_countries || []).map((c) => c.iso_3166_1),
-      rt: d.runtime || null, rd: d.release_date || null, st: d.status || null, ...ids(d.imdb_id, null), at: Date.now(),
+      rt: d.runtime || null, rd: d.release_date || null, st: d.status || null, ...ids(d.imdb_id, null),
+      // saga (collezione TMDB): [id, nome], oppure 0 = nessuna (così si sa che è già stato controllato)
+      co: d.belongs_to_collection ? [d.belongs_to_collection.id, d.belongs_to_collection.name || ''] : 0,
+      at: Date.now(),
     };
   }
   const rt = d.episode_run_time?.length ? Math.round(d.episode_run_time.reduce((a, b) => a + b, 0) / d.episode_run_time.length)
@@ -203,6 +206,56 @@ export async function fetchDirector(id, knownRuntime = () => null) {
   const kept = list.filter((f) => !(f.rt > 0 && f.rt <= SHORT_MAX_MIN));
   kept.sort((a, b) => (b.d || '9999').localeCompare(a.d || '9999') || a.t.localeCompare(b.t));
   return { name: d.name || '', films: kept, shorts: list.length - kept.length };
+}
+
+// ---- saghe ----
+// Nome di una saga senza «Collezione» / «Collection» (TMDB in italiano scrive «Harry Potter - Collezione»).
+export function sagaName(name) {
+  return (name || '')
+    .replace(/\s*[-–—:]\s*(la\s+)?(collezione|collection|saga)\s*$/i, '')
+    .replace(/^\s*(collezione|saga)\s+(di\s+)?/i, '')
+    .replace(/\s+(collezione|collection)\s*$/i, '')
+    .trim() || name || '';
+}
+
+// Una saga con tutti i suoi film in ordine di uscita (quelli senza data in fondo).
+// { id, name, p, b, films: [{ id, t, d, p, genre_ids, original_language }] }
+export async function fetchCollection(id) {
+  const d = await tm(`/collection/${id}`);
+  if (!d) return null;
+  let parts = d.parts || [];
+  if (parts.some((x) => nonLatin(x.title))) {
+    const en = await tm(`/collection/${id}`, { language: 'en-US' }).catch(() => null);
+    const t = new Map((en?.parts || []).map((x) => [x.id, x.title]));
+    parts = parts.map((x) => (nonLatin(x.title) && t.get(x.id) && !nonLatin(t.get(x.id)) ? { ...x, title: t.get(x.id) } : x));
+  }
+  const films = parts
+    .filter((x) => !x.video)
+    .map((x) => ({ id: x.id, t: x.title || x.original_title || '', d: x.release_date || '', p: x.poster_path || null, genre_ids: x.genre_ids || [], original_language: x.original_language }))
+    .sort((a, b) => (a.d || '9999').localeCompare(b.d || '9999') || a.t.localeCompare(b.t));
+  return { id: d.id, name: sagaName(d.name), p: d.poster_path || null, b: d.backdrop_path || null, films };
+}
+
+// ---- trailer ----
+// Il trailer su YouTube: prima in italiano, poi in inglese; tra quelli trovati preferisce i trailer (poi i
+// teaser), quelli ufficiali e i più recenti (per una serie, di solito quello dell'ultima stagione).
+// { key, name, lang } oppure null.
+export async function fetchTrailer(type, id) {
+  const rank = (v) => (v.type === 'Trailer' ? 0 : v.type === 'Teaser' ? 1 : 9) * 2 + (v.official ? 0 : 1);
+  for (const language of ['it-IT', 'en-US']) {
+    const d = await tm(`/${type}/${id}/videos`, { language });
+    const vids = (d?.results || []).filter((v) => v.site === 'YouTube' && v.key && (v.type === 'Trailer' || v.type === 'Teaser'));
+    if (!vids.length) continue;
+    vids.sort((a, b) => rank(a) - rank(b) || (b.published_at || '').localeCompare(a.published_at || ''));
+    return { key: vids[0].key, name: vids[0].name || '', lang: language.slice(0, 2) };
+  }
+  return null;
+}
+
+// ---- ricerca per collegare titoli presi da altrove (AniList) ----
+export async function searchTmdb(type, query, language = 'it-IT') {
+  const d = await tm(`/search/${type}`, { query, language, include_adult: 'false' });
+  return d?.results || [];
 }
 
 // Id esterni di una serie (per gli export, quando meta.json non li ha ancora): { im, tvdb }

@@ -1,12 +1,13 @@
 import { html, raw, icon, img, fmtRating, fmtDay, today, daysBetween, statusLabel, openSheet, confirmSheet, promptSheet, toast, kindBadge, tube, esc, fmtClock } from '../ui.js';
 import { item, metaOf, lib, putMeta, scheduleMetaSave } from '../store.js';
-import { fetchDetails, fetchImages, metaFromDetails, tmdbToken, movieDirectors } from '../tmdb.js';
-import { isAnime, isAnimeResult, progress, isWatched, isAired, epRange, watchedCount, airedCount, nextEpisode, rewatchOf, furthest, lastWatchDate } from '../derive.js';
+import { fetchDetails, fetchImages, metaFromDetails, tmdbToken, movieDirectors, sagaName, fetchTrailer } from '../tmdb.js';
+import { isAnime, isAnimeResult, progress, isWatched, isAired, epRange, watchedCount, airedCount, nextEpisode, rewatchOf, furthest, lastWatchDate, unwatchedAired } from '../derive.js';
 import * as A from '../actions.js';
 import { getSeason } from './upcoming.js';
 import { titleOf, seenTitles } from './common.js';
 import { agoText, watchedEpisodeSheet } from './episode.js';
 import { openPauseEditor, pauseText } from './menu.js';
+import { franchiseSection } from './franchise.js';
 
 let cur = { key: null, d: null, err: '', open: new Set() };
 // dettagli già scaricati in questa sessione: tornando su un titolo la pagina è subito completa
@@ -39,6 +40,42 @@ const info = () => {
   const d = cur.d; const m = metaOf(cur.key); const it = item(cur.key);
   return { type, id: Number(id), title: d?.title || d?.name || m?.t || it?.title || '', year: Number((d?.release_date || d?.first_air_date || '').slice(0, 4)) || m?.y || it?.year || null };
 };
+
+// ---------- trailer ----------
+// Un trailer per titolo, chiesto a TMDB una volta per sessione: { key, name } oppure null (nessuno).
+const trailers = new Map(); // key -> trailer | null | 'loading'
+function trailerOf(type, id) {
+  const key = `${type}:${id}`;
+  if (!trailers.has(key) && tmdbToken()) {
+    trailers.set(key, 'loading');
+    fetchTrailer(type, id)
+      .then((t) => { trailers.set(key, t); if (t && cur.key === key) repaint(); })
+      .catch(() => trailers.set(key, null));
+  }
+  const t = trailers.get(key);
+  return t && t !== 'loading' ? t : null;
+}
+
+function trailerSheet(t) {
+  const src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(t.key)}?playsinline=1&rel=0&autoplay=1`;
+  openSheet(String(html`
+    <div class="tr-frame"><iframe src="${src}" title="${t.name || 'Trailer'}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
+    <div class="sheet-actions">
+      <a class="btn ghost" href="https://www.youtube.com/watch?v=${encodeURIComponent(t.key)}" target="_blank" rel="noopener">Apri su YouTube</a>
+      <button class="btn primary" data-close>Chiudi</button>
+    </div>`), { className: 'tr-sheet' });
+}
+
+// ---------- quanto manca ----------
+// Episodi usciti e non visti di una serie, e il tempo per vederli (durata media degli episodi).
+function leftText(it, m, d, anime) {
+  const n = unwatchedAired(it, m).length;
+  if (!n) return '';
+  const rt = d?.episode_run_time?.[0] || m?.rt || (anime ? 24 : 42);
+  let min = n * rt;
+  if (min > 180) min = Math.round(min / 10) * 10;
+  return `${n} ${n === 1 ? 'episodio' : 'episodi'} · ${runtimeText(min)}`;
+}
 
 function runtimeText(min) {
   if (!min) return '';
@@ -182,6 +219,7 @@ export function renderDetail(type, id, rerender) {
   const L = lib();
   const inLists = (L?.lists || []).filter((l) => l.items.some((e) => e.key === key));
   const p = it ? progress(it, m) : 0;
+  const trailer = trailerOf(type, id);
 
   const chips = [
     html`<span class="chip-s">${kindBadge({ type, anime })}${anime ? 'Anime' : ''}${anime ? ' ' : ''}${type === 'tv' ? (anime ? 'serie' : 'Serie') : (anime ? 'film' : 'Film')}</span>`,
@@ -204,6 +242,9 @@ export function renderDetail(type, id, rerender) {
     // regia: ogni nome porta a tutti i suoi film
     const dirs = movieDirectors(d).slice(0, 3);
     if (dirs.length) facts.push(['Regia', dirs.map((x, i) => html`${i ? ', ' : ''}<a class="person" href="#/persona/${x.id}">${x.name}</a>`)]);
+    // saga: porta alla pagina con tutti i suoi film
+    const co = d ? (d.belongs_to_collection ? [d.belongs_to_collection.id, d.belongs_to_collection.name] : null) : m?.co;
+    if (co) facts.push(['Saga', html`<a class="person" href="#/saga/${co[0]}">${sagaName(co[1])}</a>`]);
     if (d?.release_date || m?.rd) facts.push(['Uscita', fmtDay(d?.release_date || m.rd)]);
     if (d?.runtime || m?.rt) facts.push(['Durata', runtimeText(d?.runtime || m.rt)]);
     if (it?.pause) facts.push(['Fermo a', pauseFact(it)]);
@@ -219,6 +260,7 @@ export function renderDetail(type, id, rerender) {
       facts.push(['Visti', a ? `${w} di ${a} usciti` : `${w}`]);
       const nx = nextEpisode(it, m);
       if (nx && it.status !== 'dropped') facts.push(['Il prossimo da vedere', `S${nx.s} · E${nx.e}`]);
+      if (it.status === 'watching' || it.status === 'planned') { const lt = leftText(it, m, d, anime); if (lt) facts.push(['Mancano', lt]); }
       if (it.pause) facts.push(['Fermo a', pauseFact(it)]);
     }
     if (d?.episode_run_time?.length || m?.rt) facts.push(['Durata episodi', runtimeText(d?.episode_run_time?.[0] || m.rt)]);
@@ -247,6 +289,7 @@ export function renderDetail(type, id, rerender) {
         <h1>${title}</h1>
         ${d && (d.original_title || d.original_name) && (d.original_title || d.original_name) !== title ? html`<p class="d-orig">${d.original_title || d.original_name}</p>` : ''}
         <div class="d-chips">${chips}</div>
+        ${trailer ? html`<button class="trailer-btn" data-act="d-trailer">${icon.play}Trailer</button>` : ''}
       </div>
     </div>
     <div class="d-status"><div class="d-status-row">${statusArea}${rewatchChip(it)}</div>${it ? tube(it.status, p) : ''}</div>
@@ -257,6 +300,7 @@ export function renderDetail(type, id, rerender) {
     ${facts.length ? html`<dl class="facts">${facts.map(([k, v]) => html`<div><dt>${k}</dt><dd>${v}</dd></div>`)}</dl>` : ''}
     ${resumeHtml(key, it, m)}
     ${seasonsHtml}
+    ${type === 'tv' && anime ? franchiseSection(key, it, m, it?.title || title, rerender) : ''}
     <section class="d-sec">
       <h2>Liste</h2>
       ${inLists.length ? html`<div class="d-lists">${inLists.map((l) => html`<a class="chip-s link" href="#/lista/${encodeURIComponent(l.id)}">${l.title}</a>`)}</div>` : html`<p class="muted">Non è in nessuna lista.</p>`}
@@ -525,6 +569,7 @@ function toggleSeason(s) {
 }
 
 export const detailActions = {
+  'd-trailer': () => { const t = trailers.get(cur.key); if (t && t !== 'loading') trailerSheet(t); },
   'd-ep': (el) => toggleEpisode(Number(el.dataset.s), Number(el.dataset.e)),
   'd-season': (el, { rerender }) => { const s = Number(el.dataset.s); if (cur.open.has(s)) cur.open.delete(s); else cur.open.add(s); rerender(); },
   'd-season-all': (el) => toggleSeason(Number(el.dataset.s)),
