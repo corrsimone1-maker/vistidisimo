@@ -547,6 +547,8 @@ body:has(#sheet-root .sheet-wrap.in) #toast-root { bottom: auto; top: calc(var(-
 .art-cell.on { box-shadow: 0 0 0 3px var(--lilla), 0 0 16px rgba(201, 179, 255, .5); }
 .art-check { position: absolute; right: 6px; bottom: 6px; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--lilla); color: var(--notte); }
 .art-check svg { width: 15px; height: 15px; }
+.art-check.pop { animation: ckIn .24s cubic-bezier(.3, 1.4, .5, 1) both; }
+.art-sheet [data-reset][hidden] { display: none; }
 
 /* ---------- rivisioni ---------- */
 .d-status-row { display: flex; align-items: center; gap: 10px; }

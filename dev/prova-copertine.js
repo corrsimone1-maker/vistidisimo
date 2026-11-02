@@ -1,4 +1,5 @@
-// Prova di «Cambia copertina» e «Cambia banner» dal menu ⋯ di un titolo.
+// Prova di «Cambia copertina» e «Cambia banner» dal menu ⋯ di un titolo. Il foglio resta aperto dopo la
+// scelta (la spunta si sposta, si salva subito) e si chiude con «Fatto».
 const { chromium } = require('playwright');
 const { spawn } = require('child_process');
 const path = require('path');
@@ -19,6 +20,11 @@ const OUT = process.argv[2] || require('os').tmpdir();
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  const check = (label, ok) => { console.log(`${ok ? 'ok ' : 'NO '} ${label}`); if (!ok) errors.push('fallita: ' + label); };
+  const remote = () => JSON.parse(M.files['library.json']).items['movie:129'];
+  const sheetOpen = () => page.$('.art-sheet').then((x) => !!x);
+  const onCells = () => page.$$eval('.art-cell.on', (e) => e.map((x) => x.dataset.path));
+  const checks = () => page.$$eval('.art-check', (e) => e.length);
   const base = 'http://127.0.0.1:8134/vistidisimo/';
   await page.goto(base + '#/t/movie/129');
   await page.waitForSelector('.d-head');
@@ -29,38 +35,65 @@ const OUT = process.argv[2] || require('os').tmpdir();
   await page.click('[data-art=poster]');
   await page.waitForSelector('.art-cell');
   await page.waitForTimeout(400);
-  console.log('lingue copertine:', await page.$$eval('.art-langs .chip', (e) => e.map((x) => x.textContent.trim().replace(/\s+/g, ' ')).join(' | ')));
+  console.log('    lingue copertine:', await page.$$eval('.art-langs .chip', (e) => e.map((x) => x.textContent.trim().replace(/\s+/g, ' ')).join(' | ')));
+  check('«Torna a quella predefinita» nascosto finché non ne scegli una', await page.$eval('[data-reset]', (b) => b.hidden && getComputedStyle(b).display === 'none'));
   await page.screenshot({ path: path.join(OUT, '96-copertine.png') });
   await page.click('.art-langs .chip:nth-child(2)');
   await page.waitForTimeout(200);
+  // prima scelta: il foglio resta aperto, la spunta va lì, si salva
   const chosen = await page.$eval('.art-cell:nth-child(2)', (e) => e.dataset.path);
+  const scrollBefore = await page.$eval('.art-sheet', (e) => e.scrollTop);
   await page.click('.art-cell:nth-child(2)');
-  await page.waitForTimeout(2500);
-  const remote = JSON.parse(M.files['library.json']).items['movie:129'];
-  const shown = await page.$eval('.d-poster img', (e) => e.getAttribute('src'));
-  console.log('copertina scelta:', chosen, '| salvata su GitHub:', remote.poster === chosen, '| mostrata:', shown.endsWith(chosen));
+  await page.waitForTimeout(400);
+  check('dopo la scelta il foglio resta aperto', await sheetOpen());
+  check('spunta sull’immagine scelta (una sola)', JSON.stringify(await onCells()) === JSON.stringify([chosen]) && (await checks()) === 1);
+  check('compare «Torna a quella predefinita»', await page.$eval('[data-reset]', (b) => !b.hidden && getComputedStyle(b).display !== 'none'));
+  check('il foglio non salta (stesso scroll)', (await page.$eval('.art-sheet', (e) => e.scrollTop)) === scrollBefore);
+  await page.screenshot({ path: path.join(OUT, '96b-scelta-foglio-aperto.png') });
+  // seconda scelta nello stesso foglio
+  const second = await page.$eval('.art-cell:nth-child(1)', (e) => e.dataset.path);
+  await page.click('.art-cell:nth-child(1)');
+  await page.waitForTimeout(2600);
+  check('seconda scelta: la spunta si sposta', JSON.stringify(await onCells()) === JSON.stringify([second]) && (await checks()) === 1);
+  check(`salvata su GitHub l’ultima scelta (${second})`, remote().poster === second);
+  check('la pagina dietro mostra già la copertina nuova', (await page.$eval('.d-poster img', (e) => e.getAttribute('src'))).endsWith(second));
+  // cambio lingua e ritorno: la spunta resta su quella scelta
+  await page.click('.art-langs .chip:nth-child(1)');
+  await page.waitForTimeout(150);
+  await page.click('.art-langs .chip:nth-child(2)');
+  await page.waitForTimeout(150);
+  check('cambiando lingua e tornando la spunta è ancora lì', JSON.stringify(await onCells()) === JSON.stringify([second]));
+  await page.click('.art-sheet [data-close]');
+  await page.waitForSelector('.sheet-wrap', { state: 'detached' });
+  check('«Fatto» chiude', !(await sheetOpen()));
   // banner
   await page.click('[data-act=d-more]');
   await page.waitForSelector('[data-art=backdrop]');
   await page.click('[data-art=backdrop]');
   await page.waitForSelector('.art-cell');
   await page.waitForTimeout(300);
-  console.log('lingue banner:', await page.$$eval('.art-langs .chip', (e) => e.map((x) => x.textContent.trim().replace(/\s+/g, ' ')).join(' | ')));
+  console.log('    lingue banner:', await page.$$eval('.art-langs .chip', (e) => e.map((x) => x.textContent.trim().replace(/\s+/g, ' ')).join(' | ')));
   await page.screenshot({ path: path.join(OUT, '97-banner.png') });
   await page.click('.art-langs .chip >> text=Senza testo');
   await page.waitForTimeout(200);
   const b = await page.$eval('.art-cell:nth-child(3)', (e) => e.dataset.path);
   await page.click('.art-cell:nth-child(3)');
-  await page.waitForTimeout(2500);
-  const hero = await page.$eval('.hero img', (e) => e.getAttribute('src'));
-  console.log('banner salvato:', JSON.parse(M.files['library.json']).items['movie:129'].backdrop === b, '| mostrato:', hero.endsWith(b));
-  // torna alla predefinita
+  await page.waitForTimeout(2600);
+  check('banner: foglio aperto, spunta e salvataggio', (await sheetOpen()) && JSON.stringify(await onCells()) === JSON.stringify([b]) && remote().backdrop === b);
+  check('banner nuovo già nella pagina', (await page.$eval('.hero img', (e) => e.getAttribute('src'))).endsWith(b));
+  await page.screenshot({ path: path.join(OUT, '97b-banner-scelto.png') });
+  await page.click('.art-sheet [data-close]');
+  await page.waitForSelector('.sheet-wrap', { state: 'detached' });
+  // torna alla predefinita: il foglio resta aperto, il tasto sparisce, nessuna spunta sulle altre
   await page.click('[data-act=d-more]');
   await page.click('[data-art=poster]');
-  await page.waitForSelector('[data-reset]');
+  await page.waitForSelector('.art-cell');
+  await page.waitForTimeout(300);
   await page.click('[data-reset]');
-  await page.waitForTimeout(2500);
-  console.log('copertina predefinita ripristinata:', !('poster' in JSON.parse(M.files['library.json']).items['movie:129']));
+  await page.waitForTimeout(2600);
+  check('predefinita: salvata (niente poster nell’item), foglio aperto, tasto nascosto', !('poster' in remote()) && (await sheetOpen()) && (await page.$eval('[data-reset]', (x) => x.hidden)));
+  check('predefinita: la spunta lascia l’immagine scelta prima', !(await onCells()).includes(second));
   console.log('ERRORI:', errors.length ? errors.join('\n') : 'nessuno');
   await browser.close(); srv.kill();
+  process.exit(errors.length ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });

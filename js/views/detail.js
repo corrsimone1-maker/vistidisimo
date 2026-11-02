@@ -365,18 +365,34 @@ function artworkSheet(key, kind) {
   const [type, id] = key.split(':');
   const m = metaOf(key);
   const isPoster = kind === 'poster';
-  const custom = isPoster ? it.poster : it.backdrop;
-  const current = custom || (isPoster ? (cur.d?.poster_path || m?.p) : (cur.d?.backdrop_path || m?.b));
+  const field = isPoster ? 'poster' : 'backdrop';
+  const custom = it[field];
+  const defPath = isPoster ? (cur.d?.poster_path || m?.p) : (cur.d?.backdrop_path || m?.b);
+  // Il foglio resta aperto (scelta di Simo, 2/11/2026): toccando un'immagine si salva subito e la spunta
+  // si sposta lì, così se ne può provare un'altra; si chiude con «Fatto».
+  let current = custom || defPath;
   let lang; // lingua selezionata
   openSheet(String(html`
     <h3 class="sheet-title">${isPoster ? 'Copertina' : 'Banner'}</h3>
     <div class="art-body"><p class="muted">Carico le immagini da TMDB…</p></div>
-    ${custom ? html`<button class="btn ghost wide" data-reset>Torna a quella predefinita</button>` : ''}
-    <button class="btn primary wide" data-close>Chiudi</button>`), {
+    <button class="btn ghost wide" data-reset ${custom ? '' : 'hidden'}>Torna a quella predefinita</button>
+    <button class="btn primary wide" data-close>Fatto</button>`), {
     className: 'art-sheet',
-    onMount: async (el, close) => {
-      el.querySelector('[data-reset]')?.addEventListener('click', () => { A.setArtwork(key, kind, null); toast(isPoster ? 'Copertina predefinita' : 'Banner predefinito'); close(); });
+    onMount: async (el) => {
       const body = el.querySelector('.art-body');
+      const resetBtn = el.querySelector('[data-reset]');
+      // sposta la spunta sull'immagine scelta, senza ridisegnare (la griglia resta dov'era)
+      const mark = () => {
+        body.querySelectorAll('.art-cell').forEach((c) => {
+          const on = c.dataset.path === current;
+          c.classList.toggle('on', on);
+          const chk = c.querySelector('.art-check');
+          if (on && !chk) c.insertAdjacentHTML('beforeend', String(html`<span class="art-check pop">${icon.check}</span>`));
+          if (!on && chk) chk.remove();
+        });
+        resetBtn.hidden = !item(key)?.[field];
+      };
+      resetBtn.addEventListener('click', () => { A.setArtwork(key, kind, null); current = defPath; mark(); });
       let data = imagesCache.get(key);
       if (!data) {
         try { data = await fetchImages(type, Number(id)); imagesCache.set(key, data); } catch (e) { body.innerHTML = String(html`<p class="muted">Non riesco a caricare le immagini (${e.message}).</p>`); return; }
@@ -405,7 +421,12 @@ function artworkSheet(key, kind) {
           </div>`);
         body.querySelectorAll('[data-lang]').forEach((b) => { b.onclick = () => { lang = b.dataset.lang || null; paint(); }; });
         body.querySelectorAll('[data-path]').forEach((b) => {
-          b.onclick = () => { A.setArtwork(key, kind, b.dataset.path); toast(isPoster ? 'Copertina cambiata' : 'Banner cambiato'); close(); };
+          b.onclick = () => {
+            if (b.dataset.path === current && item(key)?.[field]) return;
+            A.setArtwork(key, kind, b.dataset.path);
+            current = b.dataset.path;
+            mark();
+          };
         });
       };
       paint();
