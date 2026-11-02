@@ -2,6 +2,7 @@ import { html, icon } from '../ui.js';
 import { lib, metaOf, LS } from '../store.js';
 import { category, byLast } from '../derive.js';
 import { cardFor, titleOf, emptyState } from './common.js';
+import { openLibraryMenu, hasPaused } from './menu.js';
 
 const KINDS = [['serie', 'Serie'], ['film', 'Film'], ['anime', 'Anime']];
 const STATI = [['all', 'Tutti'], ['watching', 'In corso'], ['planned', 'Da guardare'], ['uptodate', 'In pari'], ['completed', 'Completati'], ['dropped', 'Abbandonati']];
@@ -43,7 +44,9 @@ export function renderLibrary() {
   for (const [k, it] of all) counts[category(it, metaOf(k))] += 1;
   const allOn = F.kinds.length === 3;
   return html`
-  <header class="page-top"><h1>Libreria</h1><span class="count">${all.length}</span></header>
+  <header class="page-top"><h1>Libreria</h1><span class="count">${all.length}</span>
+    <button class="icon-btn menu-btn push-right" data-act="lib-menu" aria-label="Menu">${icon.menu}${hasPaused() ? html`<span class="menu-dot"></span>` : ''}</button>
+  </header>
   <div class="lib-tools">
     <label class="search-box">${icon.search}<input type="search" data-input="lib-q" placeholder="Filtra per titolo" value="${F.q}" autocomplete="off" enterkeyhint="search"></label>
     <div class="chips" role="group" aria-label="Tipo">
@@ -72,6 +75,7 @@ export const libraryActions = {
     save(); rerender();
   },
   'lib-status': (el, { rerender }) => { F.status = el.dataset.v; save(); rerender(); },
+  'lib-menu': () => openLibraryMenu(),
 };
 
 export const libraryInputs = {

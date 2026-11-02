@@ -1,4 +1,4 @@
-import { html, raw, icon, img, today, fmtDayLong, daysBetween, toast } from '../ui.js';
+import { html, raw, icon, img, today, fmtDayLong, daysBetween, toast, fmtClock } from '../ui.js';
 import { lib, metaOf, item, dispatch, LS } from '../store.js';
 import * as A from '../actions.js';
 import { nextEpisode, isAnime, airedCount, byLast } from '../derive.js';
@@ -59,6 +59,7 @@ function checkEpisode(el, rerender) {
   motion.busy.add(id);
   const before = item(key);
   const prev = { status: before.status, last: before.last };
+  const prevPause = before.pause ? { ...before.pause } : null;
   hold(+1);
   el.classList.add('done');
   A.markEpisodes(key, [[s, e]]);
@@ -71,6 +72,7 @@ function checkEpisode(el, rerender) {
     run: () => {
       A.unmarkEpisodes(key, [[s, e]]);
       dispatch({ op: 'set', key, fields: prev });
+      if (prevPause && !item(key)?.pause) A.restorePause(key, prevPause);
       // l'episodio torna: da sinistra se la scheda c'era ancora, se no la scheda riappare
       if (sec === 'next') motion.anim.set(id, { kind: stays ? 'back' : 'appear' });
       else { motion.anim.set(id, { kind: 'appear' }); motion.anim.delete(`next:${key}`); }
@@ -122,12 +124,14 @@ function nextRow(key, it, m, ne, startLabel) {
   const ep = season?.eps?.find((e) => e.n === ne.e);
   const still = ep?.still ? img(ep.still, 'w300') : ((it.backdrop || m?.b) ? img(it.backdrop || m.b, 'w300') : (it.poster || m?.p ? img(it.poster || m.p, 'w185') : ''));
   const left = ne.left - 1;
+  // lasciato a metà proprio questo episodio: al posto di «Poi ne restano…» il minuto
+  const here = it.pause && it.pause.s === ne.s && it.pause.e === ne.e;
   return html`<div class="ep-card${an.cls}" data-sec="${sec}" ${an.style ? raw(`style="${an.style}"`) : ''}>
-    <a class="ep-still" href="#/t/tv/${id}">${still ? html`<img loading="lazy" src="${still}" alt="">` : ''}<span class="kind-dot ${isAnime(it, m) ? 'is-anime' : ''}"></span></a>
+    <a class="ep-still" href="#/t/tv/${id}">${still ? html`<img loading="lazy" src="${still}" alt="">` : ''}<span class="kind-dot ${isAnime(it, m) ? 'is-anime' : ''}"></span>${it.pause ? html`<span class="pc-pause"></span>` : ''}</a>
     <a class="ep-body" href="#/t/tv/${id}">
       <span class="ep-show">${titleOf(key, it, m)}</span>
       <span class="ep-code">S${ne.s} · E${ne.e}${ep?.name ? html` <em>${ep.name}</em>` : ''}</span>
-      <span class="ep-left">${startLabel || (left > 0 ? `Poi ne restano ${left}` : 'È l’ultimo uscito')}</span>
+      <span class="ep-left">${here ? html`<b class="pz-tag">Fermo a ${fmtClock(it.pause.t)}</b>` : (startLabel || (left > 0 ? `Poi ne restano ${left}` : 'È l’ultimo uscito'))}</span>
     </a>
     <button class="check-btn st-${it.status}" data-act="up-check" data-key="${key}" data-s="${ne.s}" data-e="${ne.e}" aria-label="Segna come visto">${icon.check}</button>
   </div>`;

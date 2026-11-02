@@ -32,6 +32,7 @@ export function cardFor(key, { fallback, removable = false, extra, withTitle = f
     rating: it?.rating ?? null,
     removable,
     extra,
+    paused: !!it?.pause,
   });
 }
 

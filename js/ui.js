@@ -40,6 +40,8 @@ export const icon = {
   replay: svg('<path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4.2 4.2v4h4"/>'),
   minus: svg('<path d="M5 12h14"/>', 'stroke-width="2.2"'),
   eye: svg('<path d="M2.8 12s3.4-6.2 9.2-6.2 9.2 6.2 9.2 6.2-3.4 6.2-9.2 6.2S2.8 12 2.8 12z"/><circle cx="12" cy="12" r="2.8"/>'),
+  menu: svg('<path d="M4 6.8h16M4 12h16M4 17.2h16"/>', 'stroke-width="2"'),
+  bookmark: svg('<path d="M6.6 3.6h10.8v16.8L12 16.6l-5.4 3.8z"/><path d="M10 8.4v4.2M14 8.4v4.2"/>'),
 };
 
 export const IMG = 'https://image.tmdb.org/t/p/';
@@ -71,12 +73,14 @@ export function kindBadge(kind) {
 export function fmtRating(r) { return r == null ? '' : Number(r).toFixed(1); }
 
 // Una locandina: immagine, iconcina film/serie, voto e tubo di stato sotto.
+// paused: pallino rosso in alto a destra (episodio o film lasciato a metà).
 export function posterCard(c) {
-  // c: { href, title, poster, kind, status, progress, rating, extra, removable, key }
+  // c: { href, title, poster, kind, status, progress, rating, extra, removable, key, paused }
   return html`<a class="pc" href="${c.href}" ${c.key ? raw(`data-key="${esc(c.key)}"`) : ''}>
     <div class="pc-img">
       ${c.poster ? html`<img loading="lazy" decoding="async" src="${img(c.poster)}" alt="">` : html`<div class="pc-ph"><span>${c.title}</span></div>`}
       ${kindBadge(c.kind)}
+      ${c.paused && !c.removable ? html`<span class="pc-pause" title="In sospeso"></span>` : ''}
       ${c.removable ? html`<button class="pc-x" data-act="list-remove" data-key="${c.key}" aria-label="Togli dalla lista">${icon.x}</button>` : ''}
     </div>
     ${tube(c.status, c.progress)}
@@ -187,3 +191,27 @@ export function today() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 export function daysBetween(a, b) { return Math.round((parseDay(b) - parseDay(a)) / 86400000); }
+
+// ---- minutaggio ----
+// Secondi → "23:14" o "1:34:20", come nei lettori video.
+export function fmtClock(t) {
+  const n = Math.max(0, Math.round(t || 0));
+  const h = Math.floor(n / 3600); const m = Math.floor((n % 3600) / 60); const s = n % 60;
+  const p = (x) => String(x).padStart(2, '0');
+  return h ? `${h}:${p(m)}:${p(s)}` : `${m}:${p(s)}`;
+}
+// "23" = 23 minuti; "23:14" (o 23,14 / 23.14: la tastiera numerica di iOS ha la virgola) = minuti e
+// secondi; "1:34:20" = ore, minuti e secondi. Dopo il primo gruppo servono due cifre, così "23,5"
+// non è ambiguo. Restituisce i secondi, oppure null se non torna.
+export function parseClock(str) {
+  const s = String(str || '').trim().replace(/\s+/g, '');
+  if (!/^\d{1,3}([:.,]\d{2}){0,2}$/.test(s)) return null;
+  const parts = s.split(/[:.,]/).map(Number);
+  let h = 0; let m = 0; let sec = 0;
+  if (parts.length === 1) [m] = parts;
+  else if (parts.length === 2) [m, sec] = parts;
+  else [h, m, sec] = parts;
+  if (sec > 59 || (parts.length === 3 && m > 59)) return null;
+  const t = h * 3600 + m * 60 + sec;
+  return t <= 12 * 3600 ? t : null;
+}

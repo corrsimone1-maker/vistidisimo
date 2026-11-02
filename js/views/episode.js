@@ -1,7 +1,7 @@
 // Scheda di un episodio (trama più completa che TMDB ha, tutti i fotogrammi) e «Ripasso»
 // (tutti gli episodi visti di una stagione, con immagine e trama, per ricordarsi dove eravamo rimasti).
 // Le trame: italiano, se manca inglese, se manca spagnolo; altre lingue no.
-import { html, raw, icon, img, fmtDay, today, daysBetween, openSheet, toast, closeAllSheets } from '../ui.js';
+import { html, raw, icon, img, fmtDay, today, daysBetween, openSheet, toast, closeAllSheets, fmtClock } from '../ui.js';
 import { item, metaOf } from '../store.js';
 import { fetchEpisode, fetchSeason, tmdbToken, genericName } from '../tmdb.js';
 import { isWatched, isAired, rewatchOf, neighbors, watchedList, lastWatchDate, furthest, nextEpisode } from '../derive.js';
@@ -147,7 +147,7 @@ export function renderEpisode(id, s, e, rerender) {
     </div>
     <div class="epd-seen-row">
       <button class="check-btn ${it ? `st-${it.status}` : ''} ${watched ? 'on' : ''}" data-act="ep-check" ${aired || watched ? '' : 'disabled'} aria-label="${watched ? 'Rivisto o non visto' : 'Segna come visto'}">${icon.check}</button>
-      <span class="epd-seen">${watched ? html`<b>${rw ? `Visto ${rw + 1} volte` : 'Visto'}</b>${seenOn ? html`<small>${rw ? 'la prima volta ' : ''}il ${fmtDay(seenOn)}</small>` : ''}` : html`<b>${aired ? 'Da vedere' : 'Non ancora uscito'}</b>`}</span>
+      <span class="epd-seen">${watched ? html`<b>${rw ? `Visto ${rw + 1} volte` : 'Visto'}</b>${seenOn ? html`<small>${rw ? 'la prima volta ' : ''}il ${fmtDay(seenOn)}</small>` : ''}` : html`<b>${aired ? 'Da vedere' : 'Non ancora uscito'}</b>`}${it?.pause && it.pause.s === s && it.pause.e === e ? html`<small class="pz-tag">Fermo a ${fmtClock(it.pause.t)}</small>` : ''}</span>
     </div>
     <section class="d-sec epd-plot"><h2>Trama</h2>${plot}</section>
     ${!hidden && stills.length ? html`<section class="d-sec">

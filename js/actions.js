@@ -1,7 +1,7 @@
 // Azioni dell'utente: ognuna produce operazioni sulla libreria.
 import { dispatch, item, metaOf, ensureMeta } from './store.js';
 import { autoStatus, unwatchedBefore, unwatchedAired, rewatchOf, watchedList, isWatched } from './derive.js';
-import { today, toast, statusLabel } from './ui.js';
+import { today, toast, statusLabel, fmtClock } from './ui.js';
 
 const nowIso = () => new Date().toISOString();
 
@@ -33,12 +33,40 @@ function updateStatusAfterEps(key) {
 
 const epLabel = (s, e) => (s === 0 ? `Speciale ${e}` : `S${s}E${e}`);
 
+// ---- dove mi sono fermato ----
+// Un punto in sospeso per titolo: { s, e, t, d } per una serie, { t, d } per un film (t in secondi,
+// d il giorno in cui l'hai segnato). Sta in library.json, così lo ritrovi su tutti i dispositivi.
+export function setPause(key, { s, e, t }) {
+  const it = item(key);
+  if (!it || t == null) return;
+  const v = it.type === 'tv' ? { s: Number(s), e: Number(e), t, d: today() } : { t, d: today() };
+  dispatch({ op: 'pause', key, v, msg: `${it.title}: fermo a ${it.type === 'tv' ? `${epLabel(v.s, v.e)} ` : ''}${fmtClock(t)}` });
+}
+
+export function clearPause(key, { msg = true } = {}) {
+  const it = item(key);
+  if (!it?.pause) return;
+  dispatch({ op: 'pause', key, v: null, msg: msg ? `${it.title}: tolto il punto in sospeso` : undefined });
+}
+
+export function restorePause(key, v) {
+  if (v && item(key)) dispatch({ op: 'pause', key, v });
+}
+
+// Finito l'episodio (o il film) lasciato a metà, il punto in sospeso non serve più.
+function finishPause(key, list) {
+  const p = item(key)?.pause;
+  if (!p) return;
+  if (list == null || list.some(([s, e]) => Number(s) === p.s && Number(e) === p.e)) clearPause(key, { msg: false });
+}
+
 export function markEpisodes(key, list, info, { offerPrevious = false } = {}) {
   if (!list.length) return;
   ensureItem(key, info, 'watching');
   const it = item(key);
   const d = today();
   dispatch({ op: 'eps', key, add: list.map(([s, e]) => [String(s), String(e), d]), msg: list.length === 1 ? `Visto ${it.title} ${epLabel(...list[0])}` : `Visti ${list.length} episodi di ${it.title}` });
+  finishPause(key, list);
   updateStatusAfterEps(key);
   if (offerPrevious && list.length === 1 && list[0][0] > 0) {
     const prev = unwatchedBefore(item(key), metaOf(key), list[0][0], list[0][1]);
@@ -63,7 +91,9 @@ export function setStatus(key, status, info) {
   const it = item(key);
   const fields = { status, last: nowIso() };
   if (it.type === 'movie' && status === 'completed' && !it.seen) fields.seen = today();
+  const wasSeen = it.status === 'completed';
   dispatch({ op: 'set', key, fields, msg: `${it.title}: ${statusLabel(it.type, status).toLowerCase()}` });
+  if (it.type === 'movie' && status === 'completed' && !wasSeen) finishPause(key, null);
   if (it.type === 'tv' && status === 'completed') {
     const missing = unwatchedAired(item(key), metaOf(key));
     if (missing.length) {
@@ -97,6 +127,7 @@ export function setRewatch(key, n) {
     if (set.length) ops.push({ op: 'rw', key, set });
   }
   dispatch(...ops);
+  if (v > old) finishPause(key, null);
 }
 
 // Visioni in più di un singolo episodio.
@@ -109,6 +140,7 @@ export function setEpisodeRewatch(key, s, e, n) {
   const ops = [{ op: 'rw', key, set: [[String(s), String(e), v]], msg: `${it.title} ${epLabel(s, e)}: ${v ? `visto ${v + 1} volte` : 'mai rivisto'}` }];
   if (v > old) ops.push({ op: 'set', key, fields: { last: nowIso() } });
   dispatch(...ops);
+  if (v > old) finishPause(key, [[s, e]]);
 }
 
 // Una stagione rivista (delta +1, con «Annulla») o una rivisione in meno (delta −1, solo agli episodi
@@ -123,11 +155,13 @@ export function rewatchSeason(key, s, delta = 1) {
   const before = list.map(([a, b]) => [String(a), String(b), rewatchOf(it, a, b)]);
   const ops = [{ op: 'rw', key, set: rwOps(it, list, delta), msg: delta > 0 ? `Rivista ${it.title} ${name}` : `${it.title} ${name}: una rivisione in meno` }];
   if (delta > 0) ops.push({ op: 'set', key, fields: { last: nowIso() } });
+  const pause = it.pause ? { ...it.pause } : null;
   dispatch(...ops);
   if (delta > 0) {
+    finishPause(key, list);
     toast(`${s === 0 ? 'Speciali rivisti' : `Stagione ${s} rivista`}`, {
       label: 'Annulla',
-      run: () => dispatch({ op: 'rw', key, set: before, msg: `Annulla rivisione di ${it.title}` }),
+      run: () => { dispatch({ op: 'rw', key, set: before, msg: `Annulla rivisione di ${it.title}` }); if (pause && !item(key)?.pause) restorePause(key, pause); },
     });
   }
 }

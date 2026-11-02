@@ -1,4 +1,4 @@
-import { html, raw, icon, img, fmtRating, fmtDay, today, daysBetween, statusLabel, openSheet, confirmSheet, promptSheet, toast, kindBadge, tube, esc } from '../ui.js';
+import { html, raw, icon, img, fmtRating, fmtDay, today, daysBetween, statusLabel, openSheet, confirmSheet, promptSheet, toast, kindBadge, tube, esc, fmtClock } from '../ui.js';
 import { item, metaOf, lib, putMeta, scheduleMetaSave } from '../store.js';
 import { fetchDetails, fetchImages, metaFromDetails, tmdbToken, movieDirectors } from '../tmdb.js';
 import { isAnime, isAnimeResult, progress, isWatched, isAired, epRange, watchedCount, airedCount, nextEpisode, rewatchOf, furthest, lastWatchDate } from '../derive.js';
@@ -6,6 +6,7 @@ import * as A from '../actions.js';
 import { getSeason } from './upcoming.js';
 import { titleOf, seenTitles } from './common.js';
 import { agoText, watchedEpisodeSheet } from './episode.js';
+import { openPauseEditor, pauseText } from './menu.js';
 
 let cur = { key: null, d: null, err: '', open: new Set() };
 // dettagli già scaricati in questa sessione: tornando su un titolo la pagina è subito completa
@@ -75,9 +76,10 @@ function seasonBlock(key, it, m, s) {
         const when = e.air ? (e.air <= today() ? fmtDay(e.air) : `Esce il ${fmtDay(e.air, { year: false })}`) : '';
         const seenOn = on ? it.eps[String(s.n)][String(e.n)] : '';
         const rw = on ? rewatchOf(it, s.n, e.n) : 0;
-        return html`<li class="ep ${on ? 'on' : ''} ${aired || on ? '' : 'future'}">
+        const paused = it?.pause && it.pause.s === s.n && it.pause.e === e.n;
+        return html`<li class="ep ${on ? 'on' : ''} ${aired || on ? '' : 'future'} ${paused ? 'paused' : ''}">
           <span class="ep-n">${e.n}</span>
-          <a class="ep-t" href="#/ep/${id}/${s.n}/${e.n}">${e.name || `Episodio ${e.n}`}<small>${when}${seenOn ? html` <span class="seen">visto il ${fmtDay(seenOn)}</span>` : (on ? html` <span class="seen">visto</span>` : '')}${rw ? html` · <span class="rw-tag">${rw + 1} volte</span>` : ''}</small></a>
+          <a class="ep-t" href="#/ep/${id}/${s.n}/${e.n}">${e.name || `Episodio ${e.n}`}<small>${when}${seenOn ? html` <span class="seen">visto il ${fmtDay(seenOn)}</span>` : (on ? html` <span class="seen">visto</span>` : '')}${rw ? html` · <span class="rw-tag">${rw + 1} volte</span>` : ''}${paused ? html` · <span class="pz-tag">fermo a ${fmtClock(it.pause.t)}</span>` : ''}</small></a>
           <button class="check-btn small ${on ? 'on' : ''}" data-act="d-ep" data-s="${s.n}" data-e="${e.n}" ${aired || on ? '' : 'disabled'} aria-label="${on ? 'Rivisto o non visto' : 'Segna come visto'}">${icon.check}</button>
         </li>`;
       })}
@@ -156,6 +158,11 @@ function rewatchSheet() {
   });
 }
 
+// Episodio (o film) lasciato a metà: nella tabella dei dati, toccandolo si cambia o si toglie.
+function pauseFact(it) {
+  return html`<button class="pz-fact" data-act="d-pause"><i></i>${pauseText(it)}</button>`;
+}
+
 // ---------- pagina ----------
 export function renderDetail(type, id, rerender) {
   repaint = rerender;
@@ -199,6 +206,7 @@ export function renderDetail(type, id, rerender) {
     if (dirs.length) facts.push(['Regia', dirs.map((x, i) => html`${i ? ', ' : ''}<a class="person" href="#/persona/${x.id}">${x.name}</a>`)]);
     if (d?.release_date || m?.rd) facts.push(['Uscita', fmtDay(d?.release_date || m.rd)]);
     if (d?.runtime || m?.rt) facts.push(['Durata', runtimeText(d?.runtime || m.rt)]);
+    if (it?.pause) facts.push(['Fermo a', pauseFact(it)]);
     if (it?.status === 'completed' && it.seen) facts.push(['Visto il', fmtDay(it.seen)]);
     if (d?.status && d.status !== 'Released') facts.push(['Stato', MOVIE_STATUS[d.status] || d.status]);
   } else {
@@ -211,6 +219,7 @@ export function renderDetail(type, id, rerender) {
       facts.push(['Visti', a ? `${w} di ${a} usciti` : `${w}`]);
       const nx = nextEpisode(it, m);
       if (nx && it.status !== 'dropped') facts.push(['Il prossimo da vedere', `S${nx.s} · E${nx.e}`]);
+      if (it.pause) facts.push(['Fermo a', pauseFact(it)]);
     }
     if (d?.episode_run_time?.length || m?.rt) facts.push(['Durata episodi', runtimeText(d?.episode_run_time?.[0] || m.rt)]);
   }
@@ -325,11 +334,13 @@ function moreSheet() {
     ${it ? html`<div class="art-btns">
       <button class="btn ghost" data-art="poster">${icon.image}Cambia copertina</button>
       <button class="btn ghost" data-art="backdrop">${icon.image}Cambia banner</button>
-    </div>` : ''}
+    </div>
+    <button class="btn ghost wide" data-pause>${icon.bookmark}${it.pause ? 'Cambia dove mi sono fermato' : 'Segna dove mi sono fermato'}</button>` : ''}
     <a class="btn ghost wide" href="https://www.themoviedb.org/${type}/${id}" target="_blank" rel="noopener">Apri su TMDB</a>
     ${it ? html`<button class="btn danger-ghost wide" data-remove>Rimuovi dalla libreria</button>` : ''}`), {
     onMount: (el, close) => {
       el.querySelectorAll('[data-art]').forEach((b) => { b.onclick = () => { close(); setTimeout(() => artworkSheet(key, b.dataset.art), 230); }; });
+      el.querySelector('[data-pause]')?.addEventListener('click', () => { close(); setTimeout(() => openPauseEditor(key), 230); });
       el.querySelectorAll('[data-anime]').forEach((b) => {
         b.onclick = () => { const v = b.dataset.anime; A.setAnime(key, v === 'auto' ? undefined : v === 'yes'); close(); };
       });
@@ -502,5 +513,6 @@ export const detailActions = {
   'd-fav': () => { A.toggleFav(cur.key, info()); },
   'd-add': (el) => { A.setStatus(cur.key, el.dataset.st, info()); toast(el.dataset.st === 'completed' ? 'Segnato come visto' : 'Aggiunto a da guardare'); },
   'd-rw': () => rewatchSheet(),
+  'd-pause': () => openPauseEditor(cur.key),
   'd-lists': () => listsSheet(cur.key, info()),
 };

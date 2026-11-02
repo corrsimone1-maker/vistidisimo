@@ -93,6 +93,12 @@ function applyOp(doc, op) {
       }
       break;
     }
+    case 'pause':
+      // punto in cui hai lasciato a metà un episodio o un film ({ s, e, t, d } o { t, d }, t in
+      // secondi); v null lo toglie. Valore assoluto: riapplicarla due volte dà lo stesso risultato.
+      if (!it) break;
+      if (op.v) it.pause = { ...op.v }; else delete it.pause;
+      break;
     case 'lnew':
       if (!doc.lists.some((l) => l.id === op.id)) doc.lists.push({ id: op.id, title: op.title, added: op.at, items: [] });
       break;
