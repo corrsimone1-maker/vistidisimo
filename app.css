@@ -527,6 +527,8 @@ body:has(#sheet-root .sheet-wrap.in) #toast-root { bottom: auto; top: calc(var(-
 .set-field em { font-style: normal; color: var(--st-uptodate); margin-left: 4px; }
 .set-field input { height: 44px; padding: 0 12px; border-radius: 11px; border: 1px solid var(--filo); background: var(--notte-2); color: var(--testo); font: 600 15px var(--f-ui); outline: none; }
 .set-field input:focus { border-color: var(--blu); }
+/* campo di testo (per il riempimento come «nome utente») ma coi pallini come una password */
+.set-field input.secret { -webkit-text-security: disc; text-security: disc; }
 .set-note { margin: 0 0 4px; color: var(--st-watching); font-size: 13.5px; font-weight: 600; }
 .set-status { margin: 0; font-weight: 700; font-size: 14px; }
 .set-status.bad { color: #ff8299; }

@@ -1,11 +1,11 @@
 import { html, icon, toast, confirmSheet, statusLabel, today } from '../ui.js';
 import { S, pull, flush, refreshMeta, saveConfig, forgetDevice, hasGhToken, lib, metaOf } from '../store.js';
 import { tm, tmdbToken } from '../tmdb.js';
-import { OWNER, DATA_REPO, serialize } from '../github.js';
+import { OWNER, DATA_REPO, BACKUP_REPO, serialize } from '../github.js';
 import { watchedCount, isAnime } from '../derive.js';
 import { letterboxdCsv, simklCsv, ensureTvIds, tvIdsMissing, exportName } from '../export.js';
 
-export const VERSION = '21';
+export const VERSION = '22';
 let busy = false;
 let note = '';
 let simklJob = null; // { done, total } mentre prepara il file per Simkl
@@ -69,19 +69,21 @@ export function renderSettings() {
     <h1>${gh ? 'Impostazioni' : 'Benvenuto'}</h1>
   </header>
   ${!gh ? html`<p class="intro">Per collegare l’app alla tua libreria incolla qui i due token che hai generato. Restano su questo dispositivo; la chiave TMDB viene salvata anche nella tua repo privata, così sugli altri dispositivi basta il token GitHub.</p>` : ''}
-  <section class="set-sec">
+  <form class="set-sec" data-submit="set-save" autocomplete="on">
     <h2>Collegamento</h2>
+    <!-- Un modulo di accesso vero, così Password di Apple propone i token salvati (con Face ID):
+         token GitHub = nome utente, chiave TMDB = password. Il token GitHub resta nascosto (.secret). -->
     <label class="set-field">
       <span>Token GitHub ${gh ? html`<em class="ok">salvato</em>` : ''}</span>
-      <input type="password" id="gh-token" placeholder="${gh ? 'Incolla un nuovo token per sostituirlo' : 'github_pat_…'}" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <input type="text" class="secret" id="gh-token" name="username" autocomplete="username" placeholder="${gh ? 'Incolla un nuovo token per sostituirlo' : 'github_pat_…'}" autocapitalize="off" autocorrect="off" spellcheck="false">
     </label>
     <label class="set-field">
       <span>Chiave TMDB (API Read Access Token) ${tmdb ? html`<em class="ok">salvata</em>` : ''}</span>
-      <input type="password" id="tmdb-token" placeholder="${tmdb ? 'Incolla una nuova chiave per sostituirla' : 'eyJhbGciOi…'}" autocomplete="off" autocapitalize="off" spellcheck="false">
+      <input type="password" id="tmdb-token" name="password" autocomplete="current-password" placeholder="${tmdb ? 'Incolla una nuova chiave per sostituirla' : 'eyJhbGciOi…'}" autocapitalize="off" autocorrect="off" spellcheck="false">
     </label>
     ${note ? html`<p class="set-note">${note}</p>` : ''}
-    <button class="btn primary wide" data-act="set-save" ${busy ? 'disabled' : ''}>${busy ? 'Controllo…' : (gh ? 'Salva' : 'Collega')}</button>
-  </section>
+    <button type="submit" class="btn primary wide" data-act="set-save" ${busy ? 'disabled' : ''}>${busy ? 'Controllo…' : (gh ? 'Salva' : 'Collega')}</button>
+  </form>
   ${gh ? html`
   <section class="set-sec">
     <h2>Sincronizzazione</h2>
@@ -101,6 +103,7 @@ export function renderSettings() {
     <button class="btn ghost wide" data-act="set-csv">Scarica per Numbers o Excel (CSV)</button>
     <a class="btn ghost wide" href="https://github.com/${OWNER}/${DATA_REPO}/blob/main/library.json" target="_blank" rel="noopener">Apri library.json su GitHub</a>
     <a class="btn ghost wide" href="https://github.com/${OWNER}/${DATA_REPO}/commits/main/library.json" target="_blank" rel="noopener">Storia delle modifiche</a>
+    <a class="btn ghost wide" href="https://github.com/${OWNER}/${BACKUP_REPO}/commits/main/library.json" target="_blank" rel="noopener">Backup notturno</a>
   </section>
   <section class="set-sec">
     <h2>Esporta per altre app</h2>
@@ -131,7 +134,9 @@ export const settingsActions = {
           throw new Error(`Il token GitHub non funziona: ${S.sync.msg} Controlla che abbia accesso a ${DATA_REPO} con permesso Contents in lettura e scrittura.`);
         }
       }
-      if (tmIn) {
+      // Con il riempimento automatico arriva anche la chiave TMDB che c'è già (presa da config.json):
+      // in quel caso niente controllo e niente commit inutile.
+      if (tmIn && tmIn !== tmdbToken()) {
         try { await tm('/configuration', {}, tmIn); } catch (e) { throw new Error(`La chiave TMDB non funziona (${e.message}). Serve l'API Read Access Token, quello lungo.`); }
         localStorage.setItem('vds.tmdbToken', tmIn);
         if (hasGhToken()) { try { await saveConfig({ tmdb: tmIn }); } catch (e) { console.warn(e); } }

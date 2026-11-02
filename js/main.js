@@ -146,6 +146,22 @@ document.addEventListener('change', (ev) => {
   const el = ev.target.closest('select[data-input]');
   if (el) INPUTS[el.dataset.input]?.(el, ctx(ev));
 });
+// I moduli (per ora quello dei token) non ricaricano mai la pagina: l'invio fa l'azione di data-submit.
+document.addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  const f = ev.target.closest('form[data-submit]');
+  if (f) ACTIONS[f.dataset.submit]?.(f, ctx(ev));
+});
+// Immagini con un ripiego (data-fallback, per esempio i fotogrammi in w780 → original): se la prima non
+// carica si prova l'altra, una volta sola. Così niente codice scritto dentro l'HTML con indirizzi da TMDB.
+document.addEventListener('error', (ev) => {
+  const t = ev.target;
+  if (t instanceof HTMLImageElement && t.dataset.fallback) {
+    const f = t.dataset.fallback;
+    delete t.dataset.fallback;
+    t.src = f;
+  }
+}, true);
 
 // Niente zoom: iOS ignora in parte user-scalable=no, quindi si bloccano anche i gesti di pizzico.
 ['gesturestart', 'gesturechange', 'gestureend'].forEach((t) => document.addEventListener(t, (e) => e.preventDefault(), { passive: false }));

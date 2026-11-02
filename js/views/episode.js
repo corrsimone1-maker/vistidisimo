@@ -86,9 +86,10 @@ export function watchedEpisodeSheet(key, s, e) {
 }
 
 // Fotogramma grande e nitido. TMDB elenca per i fotogrammi solo w92/w185/w300/original: w780 è una
-// misura dei banner che di solito va anche qui; se non va si ripiega sull'originale.
+// misura dei banner che di solito va anche qui; se non va si ripiega sull'originale (data-fallback,
+// gestito in main.js: niente codice nell'HTML, il percorso di TMDB resta un dato).
 function bigImg(path, { lazy = false } = {}) {
-  return html`<img ${lazy ? raw('loading="lazy"') : ''} src="${img(path, 'w780')}" onerror="this.onerror=null;this.src='${img(path, 'original')}'" alt="">`;
+  return html`<img ${lazy ? raw('loading="lazy"') : ''} src="${img(path, 'w780')}" data-fallback="${img(path, 'original')}" alt="">`;
 }
 
 function paragraphs(text) {

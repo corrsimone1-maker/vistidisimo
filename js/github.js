@@ -2,6 +2,8 @@
 
 export const OWNER = 'corrsimone1-maker';
 export const DATA_REPO = 'vistidisimo-dati';
+// Repo del backup notturno: l'app non la legge né la scrive (il suo token non ci arriva), la linka soltanto.
+export const BACKUP_REPO = 'vistidisimo-backup';
 const API = 'https://api.github.com';
 const BRANCH = 'main';
 
