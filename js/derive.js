@@ -1,5 +1,5 @@
 // Calcoli sui dati: avanzamento, stato automatico, prossimo episodio, anime, statistiche.
-import { today } from './ui.js';
+import { today, daysBetween } from './ui.js';
 
 const ENDED = new Set(['Ended', 'Canceled']);
 
@@ -153,6 +153,38 @@ export function unwatchedAired(it, m) {
     for (let en = first; en <= last; en++) if (!isWatched(it, sn, en) && isAired(m, sn, en)) out.push([sn, en]);
   }
   return out;
+}
+
+// ---- nuova stagione ----
+// Una stagione nuova è uscita da poco: è l'ultima stagione regolare (dalla 2 in poi) con almeno un
+// episodio fuori, è cominciata negli ultimi NEW_SEASON_DAYS giorni e dopo che la serie è entrata in
+// libreria, non ne hai visto niente e l'avviso non l'ha ancora mostrata (`announced`). Solo per le
+// serie che segui: in corso, in pari o completate (non da guardare, non abbandonate).
+// Restituisce { n, d, k, cnt }: stagione, giorno d'inizio, episodi usciti (null se non si sa), episodi.
+export const NEW_SEASON_DAYS = 30;
+const FOLLOWED = new Set(['watching', 'uptodate', 'completed']);
+export function newSeason(it, m, t = today()) {
+  if (!it || it.type !== 'tv' || !m || !FOLLOWED.has(it.status)) return null;
+  const le = m.le && m.le[0] > 0 ? m.le : null;
+  let cand = null;
+  for (const s of seasons(m)) {
+    const [n, cnt, d] = s;
+    if (!cnt) continue;
+    const [first] = epRange(m, n);
+    // il primo episodio è ancora il «prossimo»: la stagione non è uscita, qualunque data dica TMDB
+    if (m.ne && m.ne[0] === n && m.ne[1] <= first) continue;
+    if ((le && n <= le[0]) || (d && d <= t)) cand = s;
+  }
+  if (!cand) return null;
+  const [n, cnt, d] = cand;
+  if (n < 2 || !d || d > t || n <= (it.announced || 0)) return null;
+  if (daysBetween(d, t) > NEW_SEASON_DAYS) return null;
+  if (it.added && d <= it.added.slice(0, 10)) return null;
+  if (it.eps?.[String(n)] && Object.keys(it.eps[String(n)]).length) return null;
+  let k = null;
+  if (le && le[0] > n) k = cnt;
+  else if (le && le[0] === n) { const [first] = epRange(m, n); k = Math.max(1, Math.min(cnt, le[1] - first + 1)); }
+  return { n, d, k, cnt };
 }
 
 // ---- rivisioni ----

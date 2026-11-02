@@ -99,6 +99,11 @@ function applyOp(doc, op) {
       if (!it) break;
       if (op.v) it.pause = { ...op.v }; else delete it.pause;
       break;
+    case 'ann':
+      // avviso «nuova stagione» già mostrato fino alla stagione n. Tiene il massimo, così riapplicarla
+      // (o riceverne una vecchia da un altro dispositivo) non fa riapparire un avviso.
+      if (it && op.n > (it.announced || 0)) it.announced = op.n;
+      break;
     case 'lnew':
       if (!doc.lists.some((l) => l.id === op.id)) doc.lists.push({ id: op.id, title: op.title, added: op.at, items: [] });
       break;

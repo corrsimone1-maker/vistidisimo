@@ -5,9 +5,18 @@ const crypto = require('crypto');
 // durate dei film finti della filmografia: due corti (12 e 40 minuti), uno da 41, uno senza durata
 const SHORTS = { 900001: 12, 900005: 40, 900006: 41, 900002: 0 };
 
-function makeMocks(libPath, { animeKeys = new Set() } = {}) {
+// newSeasons: false (di base) segna ogni serie come già annunciata (`announced`), così la finestra
+// «Nuova stagione» non copre le schermate nelle prove che non la riguardano, anche quando i dati veri
+// hanno una stagione appena uscita. La prova della finestra passa newSeasons: true.
+function makeMocks(libPath, { animeKeys = new Set(), newSeasons = false } = {}) {
   const lib = JSON.parse(fs.readFileSync(libPath, 'utf8'));
-  const files = { 'library.json': fs.readFileSync(libPath, 'utf8') };
+  let text = fs.readFileSync(libPath, 'utf8');
+  if (!newSeasons) {
+    const doc = JSON.parse(text);
+    for (const it of Object.values(doc.items || {})) if (it.type === 'tv') it.announced = 999;
+    text = JSON.stringify(doc);
+  }
+  const files = { 'library.json': text };
   const shas = { 'library.json': 'sha0' };
   const log = { puts: [], gets: 0 };
   const today = new Date();

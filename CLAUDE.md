@@ -22,14 +22,14 @@ HTML/CSS/JS statici, moduli ES senza build né dipendenze. Niente framework.
 | `js/actions.js` | azioni utente → operazioni |
 | `js/export.js` | esportazione per altre app: CSV di Letterboxd (film) e di Simkl (tutto) |
 | `js/ui.js` | template `html` con escape, icone SVG, locandina (`posterCard`), fogli dal basso, avvisi, date |
-| `js/views/*.js` | schermate: `home`, `library`, `search`, `upcoming` (Prossimi), `detail`, `episode` (scheda episodio e Ripasso), `person` (film di un regista), `lists`, `settings`; `menu` = menu ≡ della Libreria (fogli, nessuna rotta) |
+| `js/views/*.js` | schermate: `home`, `library`, `search`, `upcoming` (Prossimi), `detail`, `episode` (scheda episodio e Ripasso), `person` (film di un regista), `lists`, `settings`; `menu` = menu ≡ della Libreria (fogli, nessuna rotta); `newseason` = finestra «Nuova stagione» (nessuna rotta) |
 | `sw.js` | service worker: rete prima, cache solo come ripiego offline |
 | `dev/` | prove con Playwright e API finte (vedi sotto). Non fa parte dell'app |
 
 Rotte: `#/home`, `#/raccolta/<serie|film|serie-preferite|film-preferiti>`, `#/libreria`, `#/cerca`, `#/prossimi`, `#/t/<tv|movie>/<id>`, `#/ep/<idSerie>/<stagione>/<episodio>`, `#/ripasso/<idSerie>[/<stagione>]`, `#/persona/<idTMDB>`, `#/liste`, `#/lista/<id>`, `#/impostazioni`. Le schede (titolo, episodio, ripasso, regista) ritrovano lo scroll solo quando ci torni con indietro/avanti della cronologia, non quando le riapri da un link: ogni voce nuova riceve un numero in `history.state` (`isHistoryReturn` in `main.js`, con `history.scrollRestoration = 'manual'`); le schede principali (Home, Libreria, Cerca, Prossimi, Liste) tengono sempre lo scroll (`KEEP_SCROLL`); i dettagli TMDB dei titoli aperti restano in memoria per la sessione (`seenDetails` in `detail.js`), così tornando la pagina è subito completa.
 
 ### Sincronizzazione (non romperla)
-- Ogni azione è un'**operazione** (`add`, `set`, `del`, `eps`, `rw`, `pause`, `lnew`, `lset`, `ldel`, `ladd`, `lrem`, `lorder`) messa in coda in `localStorage` (`vds.ops`). La libreria mostrata = ultima versione scaricata (`vds.base`) + operazioni in coda.
+- Ogni azione è un'**operazione** (`add`, `set`, `del`, `eps`, `rw`, `pause`, `ann`, `lnew`, `lset`, `ldel`, `ladd`, `lrem`, `lorder`) messa in coda in `localStorage` (`vds.ops`). La libreria mostrata = ultima versione scaricata (`vds.base`) + operazioni in coda.
 - `flush()` parte 1,5 s dopo l'ultima azione, quando l'app va in background e al ritorno online. Riapplica le operazioni sull'ultima versione di GitHub; se lo sha non torna (409/422), riscarica e riprova. Così due dispositivi non si sovrascrivono.
 - Ogni salvataggio è un commit su `library.json` con un messaggio leggibile (`op.msg`).
 - Token scaduto o sbagliato (401/403): la coda resta sul dispositivo, in Home compare un avviso rosso, e incollando un token nuovo in Impostazioni la coda parte da sola.
@@ -54,6 +54,13 @@ Chiave `tipo:idTMDB` (`tv:48866`, `movie:129`). Stati: `planned` da guardare, `w
 - Il tempo in Home conta anche le rivisioni (episodi: `rw`; film: `rewatch`); il numero di episodi/film visti no.
 
 **Dove mi sono fermato** (2/11/2026): `pause` dell'item = `{ s, e, t, d }` per una serie, `{ t, d }` per un film (`t` secondi, `d` giorno in cui l'hai segnato). Uno per titolo. Operazione `pause` con `v` (valore assoluto, `null` lo toglie). Si toglie da solo quando segni visto **quell'**episodio (anche da una stagione intera o da Prossimi), quando lo segni rivisto, quando un film passa a «Visto» o fai +1 a una rivisione intera (`finishPause` in `actions.js`); «Annulla» di Prossimi e della stagione rivista lo rimettono. Non cambia `last`. (Il README della repo dati non lo descrive ancora: va bene così, `library.json` lo porta e basta.)
+
+**Nuova stagione** (2/11/2026, chiesta da Simo: «mi gasa», ma **tutto dentro l'app**, niente calendario né notifiche fuori): all'apertura dell'app (dopo `pull`, e di nuovo dopo `refreshMeta`) compare una **finestra** al centro con il banner della serie (`backdrop` scelto o `b` di TMDB), «Stagione N» al neon, titolo e «Uscita oggi · 1 episodio su 8». Con più serie: «Nuove stagioni», una scheda per serie dalla più recente, solo «Ok»; con una sola: «Ok» e «Apri». Toccare una scheda apre la serie. Codice in `js/views/newseason.js`, regola in `newSeason` (`derive.js`):
+- serie **in corso, in pari o completate** (non da guardare, non abbandonate); l'ultima stagione regolare **dalla 2 in poi** con almeno un episodio uscito (da `le`, o dalla data della stagione; se `ne` è ancora il suo primo episodio non è uscita, qualunque data dica TMDB);
+- cominciata da **30 giorni al massimo** (`NEW_SEASON_DAYS`) e **dopo** che la serie è entrata in libreria (`added`); niente visto di quella stagione; non ancora annunciata.
+- Chiudendo la finestra (Ok, tocco fuori o apertura di una serie) tutte le stagioni mostrate si segnano con l'operazione `ann` → campo **`announced`** dell'item (= ultima stagione annunciata). `ann` tiene il **massimo**, così un avviso vecchio da un altro dispositivo non lo abbassa. Sta in `library.json`, quindi la finestra si vede una volta sola su iPhone, iPad e Mac.
+- Con un foglio aperto o l'app in background la finestra aspetta (riprova ogni 1,5 s); durante la prima costruzione di `meta.json` non parte.
+- Nelle prove `makeMocks` segna di base ogni serie come già annunciata (`announced: 999`), così la finestra non copre le altre prove anche se i dati veri hanno una stagione appena uscita; `prova-stagioni.js` passa `newSeasons: true`.
 
 **Date**: tutte `YYYY-MM-DD` (l'app scrive `today()`); 82 episodi e 6 film importati con l'ora sono stati ripuliti il 28/10/2026.
 
@@ -120,5 +127,7 @@ node prova-export.js /percorso/screenshot                # export Letterboxd e S
 node prova-prossimi.js /percorso/screenshot              # animazione del cerchio in Da vedere (fotogrammi pr-*.png), Annulla, scheda che si chiude, Da iniziare, movimento ridotto
 node prova-sospesi.js /percorso/screenshot               # menu ≡ e «dove mi sono fermato»: minutaggio, serie/film/anime assoluto, pallini, «Fermo a», pulizia automatica, reset, ricarica
 node prova-sicurezza.js /percorso/screenshot             # modulo dei token per Password di Apple, Invio senza ricaricare, niente commit inutile di config.json, ripiego w780→original, nessun gestore inline
+node prova-stagioni.js /percorso/screenshot              # finestra «Nuova stagione»: casi limite di newSeason, più serie / una sola, Ok, Apri, tocco fuori, announced su GitHub (mai abbassato), altro dispositivo, attesa con un foglio aperto
 ```
+`prova-sospesi.js` è scritta sui dati veri di fine ottobre 2026 (The 100 in corso a S2E5, un solo titolo con «naru»): con i dati del 2/11/2026 (The 100 completata, tre Naruto) 9 verifiche falliscono anche senza nessuna modifica all'app. Va riscritta con dati fissi prima di fidarsene.
 Playwright è installato globalmente: lancia le prove con `NODE_PATH=$(npm root -g) node …`. Se una prova si interrompe può lasciare acceso il suo `python3 -m http.server`: spegnilo (`pkill -f "[h]ttp\.server 81"`) prima di rilanciare, se no la prova successiva sulla stessa porta usa il server vecchio. Le due repo devono stare una accanto all'altra (le prove leggono `../vistidisimo-dati/library.json` senza modificarlo). `mock.js` simula l'API Contents di GitHub (con sha e 409), TMDB (dettagli, stagioni, ricerca, tendenze) e le immagini. Viewport 393×852 come l'iPhone di Simo; guarda sempre gli screenshot.

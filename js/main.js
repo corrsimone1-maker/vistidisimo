@@ -9,6 +9,7 @@ import { renderEpisode, renderRipasso, episodeActions } from './views/episode.js
 import { renderPerson } from './views/person.js';
 import { renderLists, renderList, listActions, initReorder } from './views/lists.js';
 import { renderSettings, settingsActions } from './views/settings.js';
+import { checkNewSeasons } from './views/newseason.js';
 
 const view = document.getElementById('view');
 const scrollMem = new Map();
@@ -172,11 +173,18 @@ initReorder();
 subscribe(scheduleRerender);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') { flush(); saveMeta(); return; }
-  if (hasGhToken() && Date.now() - S.lastFetch > 60000) pull().then((ok) => { if (ok) refreshMeta(); });
+  if (hasGhToken() && Date.now() - S.lastFetch > 60000) pull().then((ok) => { if (ok) afterPull(); });
 });
 window.addEventListener('online', () => flush());
 
 window.__vdsBooted = true;
+
+// Libreria appena scaricata: avviso delle stagioni nuove con i dati TMDB che ci sono già, poi di nuovo
+// quando sono aggiornati (una stagione uscita oggi arriva di solito da lì).
+function afterPull() {
+  checkNewSeasons();
+  refreshMeta().then(checkNewSeasons, checkNewSeasons);
+}
 
 async function boot() {
   loadCache();
@@ -184,7 +192,7 @@ async function boot() {
   if (!hasGhToken()) return;
   const ok = await pull();
   rerender();
-  if (ok) refreshMeta();
+  if (ok) afterPull();
 }
 boot();
 
