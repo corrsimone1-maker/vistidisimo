@@ -1,7 +1,7 @@
 import { html, raw, icon, img, fmtRating, fmtDay, today, statusLabel, openSheet, confirmSheet, promptSheet, toast, kindBadge, tube, esc, fmtClock } from '../ui.js';
 import { item, metaOf, lib, putMeta, scheduleMetaSave } from '../store.js';
-import { fetchDetails, fetchImages, metaFromDetails, tmdbToken, movieDirectors, fetchTrailer } from '../tmdb.js';
-import { isAnime, isAnimeResult, progress, isWatched, isAired, epRange, watchedCount, airedCount, nextEpisode, rewatchOf, furthest, unwatchedAired } from '../derive.js';
+import { fetchDetails, fetchImages, metaFromDetails, tmdbToken, movieDirectors, fetchTrailer, nonLatin } from '../tmdb.js';
+import { isAnime, isAnimeResult, progress, isWatched, isAired, epRange, watchedCount, airedCount, rewatchOf, furthest, unwatchedAired } from '../derive.js';
 import * as A from '../actions.js';
 import { getSeason } from './upcoming.js';
 import { titleOf, seenTitles } from './common.js';
@@ -10,6 +10,7 @@ import { openPauseEditor, pauseText } from './menu.js';
 import { franchiseSection } from './franchise.js';
 import { sagaSection } from './saga.js';
 import { fillerInfo } from '../filler.js';
+import { romajiOf, ensureRomaji, norm } from '../mal.js';
 
 let cur = { key: null, d: null, err: '', open: new Set() };
 // dettagli già scaricati in questa sessione: tornando su un titolo la pagina è subito completa
@@ -203,6 +204,15 @@ export function renderDetail(type, id, rerender) {
   const backdrop = it?.backdrop || d?.backdrop_path || m?.b;
   const yr = (d?.release_date || d?.first_air_date || '').slice(0, 4) || m?.y || it?.year || '';
   const anime = it ? isAnime(it, m) : (d ? isAnimeResult({ genre_ids: (d.genres || []).map((g) => g.id), original_language: d.original_language, origin_country: d.origin_country }) : isAnime({}, m));
+  // titolo originale: per gli anime in giapponese il romaji di MyAnimeList (es. «Shingeki no Kyojin»);
+  // mai in una scrittura che Simo non legge (giapponese, coreano…)
+  let orig = d?.original_title || d?.original_name || '';
+  if (orig && anime && nonLatin(orig)) {
+    const ro = romajiOf(key);
+    if (!ro) ensureRomaji(key, { ot: orig, t: title, y: yr }, rerender);
+    orig = ro;
+  }
+  if (nonLatin(orig)) orig = '';
   const genres = (d?.genres || []).slice(0, 3).map((g) => g.name);
   const L = lib();
   const inLists = (L?.lists || []).filter((l) => l.items.some((e) => e.key === key));
@@ -243,8 +253,6 @@ export function renderDetail(type, id, rerender) {
     if (it) {
       const a = airedCount(m); const w = watchedCount(it);
       facts.push(['Visti', a ? `${w} di ${a} usciti` : `${w}`]);
-      const nx = nextEpisode(it, m);
-      if (nx && it.status !== 'dropped') facts.push(['Il prossimo da vedere', `S${nx.s} · E${nx.e}`]);
       if (it.status === 'watching' || it.status === 'planned') { const lt = leftText(it, m, d, anime); if (lt) facts.push(['Mancano', lt]); }
       if (it.pause) facts.push(['Fermo a', pauseFact(it)]);
     }
@@ -277,7 +285,7 @@ export function renderDetail(type, id, rerender) {
       <div class="d-poster">${poster ? html`<img src="${img(poster)}" alt="">` : html`<div class="pc-ph"><span>${title}</span></div>`}</div>
       <div class="d-titles">
         <h1>${title}</h1>
-        ${d && (d.original_title || d.original_name) && (d.original_title || d.original_name) !== title ? html`<p class="d-orig">${d.original_title || d.original_name}</p>` : ''}
+        ${orig && norm(orig) !== norm(title) ? html`<p class="d-orig">${orig}</p>` : ''}
         <div class="d-chips">${chips}</div>
         ${trailer ? html`<button class="trailer-btn" data-act="d-trailer">${icon.play}Trailer</button>` : ''}
       </div>

@@ -2,9 +2,11 @@ import { html, icon, img, kindBadge, statusLabel, tube, posterCard } from '../ui
 import { tm, tmdbToken, nonLatin } from '../tmdb.js';
 import { item, metaOf, LS } from '../store.js';
 import { isAnimeResult, progress } from '../derive.js';
+import { searchMal, romajiOf, norm, sim } from '../mal.js';
 import { emptyState } from './common.js';
 
-const st = { q: '', results: null, error: '', trending: null, trendingTried: false, seq: 0, en: new Map(), view: LS.get('vds.searchView', 'list') };
+// aka: altri titoli (romaji, inglese, giapponese) dei risultati trovati anche su MyAnimeList
+const st = { q: '', results: null, error: '', trending: null, trendingTried: false, seq: 0, en: new Map(), aka: new Map(), view: LS.get('vds.searchView', 'list') };
 let timer = null;
 
 const keep = (r) => (r.media_type === 'movie' || r.media_type === 'tv');
@@ -30,9 +32,12 @@ function resultRow(r) {
   const key = keyOf(r);
   const it = item(key);
   const title = readableTitle(r);
-  const orig = r.original_title || r.original_name || '';
   const year = (r.release_date || r.first_air_date || '').slice(0, 4);
   const anime = isAnimeResult(r);
+  // titolo originale: per gli anime il romaji, se si conosce; mai in una scrittura che Simo non legge
+  let orig = r.original_title || r.original_name || '';
+  if (anime) orig = romajiOf(key) || orig;
+  if (nonLatin(orig)) orig = '';
   const kind = type === 'tv' ? (anime ? 'Serie anime' : 'Serie') : (anime ? 'Film anime' : 'Film');
   const poster = it?.poster || r.poster_path;
   return html`<a class="sr" href="#/t/${type}/${r.id}">
@@ -43,7 +48,7 @@ function resultRow(r) {
     <span class="sr-body">
       <span class="sr-title">${title}</span>
       <span class="sr-meta">${kind}${year ? `, ${year}` : ''}</span>
-      ${orig && orig !== title ? html`<span class="sr-orig">${orig}</span>` : ''}
+      ${orig && norm(orig) !== norm(title) ? html`<span class="sr-orig">${orig}</span>` : ''}
       ${it ? html`<span class="sr-st st-${it.status}"><i></i>${statusLabel(type, it.status)}</span>${tube(it.status, progress(it, metaOf(key)))}` : ''}
     </span>
   </a>`;
@@ -95,6 +100,28 @@ async function loadTrending() {
   paint();
 }
 
+// Quanto un risultato corrisponde a quello che hai scritto, in qualunque lingua: titolo italiano, inglese,
+// originale e (per gli anime) romaji. Uguale 1, comincia così ~0,9, lo contiene 0,75, se no somiglianza.
+function score(r, q) {
+  const qn = norm(q);
+  const key = keyOf(r);
+  const names = [r.title || r.name, st.en.get(key)?.title, r.original_title || r.original_name, romajiOf(key), ...(st.aka.get(key) || [])];
+  let best = 0;
+  for (const n of names) {
+    const x = norm(n);
+    if (!x || !qn) continue;
+    const s = x === qn ? 1 : x.startsWith(qn) ? 0.9 - Math.min(0.1, (x.length - qn.length) / 200) : x.includes(qn) ? 0.75 : 0.7 * sim(n, q);
+    if (s > best) best = s;
+  }
+  return best;
+}
+// Prima quello che corrisponde meglio; a parità, il più seguito (popolarità di TMDB).
+const rank = (r, q) => score(r, q) + 0.05 * Math.min(1, Math.log10(1 + (r.popularity || 0)) / 3);
+
+// Gli anime trovati su MyAnimeList per la stessa ricerca (al massimo 2,5 secondi di attesa): così
+// «Shingeki no Kyojin» o «Attack on Titan» trovano la serie anche se TMDB non la mette in cima.
+const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r(null), ms))]);
+
 async function runSearch() {
   const q = st.q.trim();
   const seq = ++st.seq;
@@ -103,11 +130,26 @@ async function runSearch() {
   paint();
   try {
     const ask = (page, language) => tm('/search/multi', { query: q, include_adult: 'false', page, language });
-    const [p1, p2, e1, e2] = await Promise.all([ask(1), ask(2), ask(1, 'en-US').catch(() => null), ask(2, 'en-US').catch(() => null)]);
+    const malP = q.length >= 3 ? searchMal(q).catch(() => null) : Promise.resolve(null);
+    const [p1, p2, e1, e2, mal] = await Promise.all([ask(1), ask(2), ask(1, 'en-US').catch(() => null), ask(2, 'en-US').catch(() => null), withTimeout(malP, 2500)]);
     if (seq !== st.seq) return;
     rememberEnglish([...(e1?.results || []), ...(e2?.results || [])]);
     const seen = new Set();
-    st.results = [...(p1?.results || []), ...(p2?.results || [])].filter(keep).filter((r) => { const k = keyOf(r); if (seen.has(k)) return false; seen.add(k); return true; });
+    const list = [...(p1?.results || []), ...(p2?.results || []), ...(e1?.results || [])].filter(keep).filter((r) => { const k = keyOf(r); if (seen.has(k)) return false; seen.add(k); return true; });
+    for (const h of mal || []) {
+      st.aka.set(h.key, h.names);
+      if (seen.has(h.key)) continue;
+      // un anime che TMDB non ha dato: si aggiunge solo se il titolo corrisponde davvero
+      const [type, id] = h.key.split(':');
+      const r = { id: Number(id), media_type: type, poster_path: h.p, genre_ids: [16], original_language: 'ja', origin_country: ['JP'], popularity: 0 };
+      if (type === 'movie') Object.assign(r, { title: h.t, release_date: h.year ? `${h.year}` : '' });
+      else Object.assign(r, { name: h.t, first_air_date: h.year ? `${h.year}` : '' });
+      if (score(r, q) >= 0.75) { seen.add(h.key); list.push(r); }
+    }
+    const order = new Map(list.map((r, i) => [keyOf(r), i]));
+    st.results = list.map((r) => ({ r, s: rank(r, q) })).sort((a, b) => b.s - a.s || order.get(keyOf(a.r)) - order.get(keyOf(b.r))).map((x) => x.r);
+    // se MyAnimeList arriva dopo, porta solo i romaji (l'ordine non cambia sotto le dita)
+    if (!mal) malP.then((m) => { if (m && seq === st.seq) paint(); });
   } catch (e) { if (seq === st.seq) st.error = e.message; }
   if (seq === st.seq) paint();
 }

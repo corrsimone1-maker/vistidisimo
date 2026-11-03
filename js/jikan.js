@@ -15,6 +15,9 @@ export class JikanError extends Error {}
 
 let chain = Promise.resolve();
 const stamps = [];
+// se MyAnimeList non risponde, per 5 minuti chi può farne a meno (la ricerca) non aspetta
+let downUntil = 0;
+export const jikanDown = () => Date.now() < downUntil;
 
 // Aspetta il proprio turno nella fila.
 function slot() {
@@ -41,7 +44,7 @@ export async function jikan(path) {
     try {
       r = await fetch(API + path, { headers: { Accept: 'application/json' } });
     } catch {
-      if (attempt === 2) throw new JikanError('MyAnimeList non è raggiungibile');
+      if (attempt === 2) { downUntil = Date.now() + 5 * 60 * 1000; throw new JikanError('MyAnimeList non è raggiungibile'); }
       await sleep(1000 * (attempt + 1));
       continue;
     }
@@ -52,8 +55,12 @@ export async function jikan(path) {
       throw new JikanError('MyAnimeList chiede di aspettare un minuto');
     }
     if (r.status >= 500 && attempt < 2) { await sleep(1500 * (attempt + 1)); continue; }
-    if (!r.ok) throw new JikanError(`MyAnimeList ha risposto ${r.status}`);
+    if (!r.ok) {
+      if (r.status >= 500) downUntil = Date.now() + 5 * 60 * 1000;
+      throw new JikanError(`MyAnimeList ha risposto ${r.status}`);
+    }
     try { return await r.json(); } catch { throw new JikanError('Risposta di MyAnimeList non valida'); }
   }
+  downUntil = Date.now() + 5 * 60 * 1000;
   throw new JikanError('MyAnimeList non risponde');
 }

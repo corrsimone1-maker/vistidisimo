@@ -12,7 +12,7 @@
 // giorni (`vds.mal.map`, non trovati 14).
 import { searchTmdb } from './tmdb.js';
 import { LS } from './store.js';
-import { jikan } from './jikan.js';
+import { jikan, jikanDown } from './jikan.js';
 
 const DAY = 24 * 3600 * 1000;
 const FR_TTL = 7 * DAY; // elenco dei film e OVA di una serie
@@ -137,20 +137,72 @@ async function mapToTmdb(n, opts) {
   return b;
 }
 
-// ---- la serie su MyAnimeList ----
-// m: dati TMDB della serie (meta.json): t titolo, ot originale, y anno della prima puntata.
-async function findStart(m, fallbackTitle) {
-  const qs = [...new Set([m?.ot, m?.t, fallbackTitle].filter(Boolean))];
+// ---- un titolo TMDB su MyAnimeList ----
+// names: titoli TMDB (originale, italiano…), year: anno di uscita, kinds: tipi di MyAnimeList ammessi.
+async function findMal(names, year, kinds) {
+  const qs = [...new Set(names.filter(Boolean))];
   for (const q of qs) {
     const d = await jikan(`/anime?q=${encodeURIComponent(q)}&limit=15`);
-    const res = (d?.data || []).map(slim).filter((x) => !x.adult && SERIESLIKE.has(x.type));
-    const ok = res.filter((x) => x.year && m?.y && Math.abs(x.year - m.y) <= 1)
-      .map((x) => ({ x, s: Math.max(...titles(x).map((t) => Math.max(sim(t, m?.ot), sim(t, m?.t), sim(t, fallbackTitle)))) + (x.year === m.y ? 0.05 : 0) }))
+    const res = (d?.data || []).map(slim).filter((x) => !x.adult && kinds.has(x.type));
+    const ok = res.filter((x) => x.year && year && Math.abs(x.year - year) <= 1)
+      .map((x) => ({ x, s: Math.max(...titles(x).map((t) => Math.max(...qs.map((n) => sim(t, n))))) + (x.year === year ? 0.05 : 0) }))
       .filter((y) => y.s >= 0.5)
       .sort((a, b) => b.s - a.s);
     if (ok.length) return ok[0].x;
   }
   return null;
+}
+// La serie: m = dati TMDB della serie (meta.json): t titolo, ot originale, y anno della prima puntata.
+const findStart = (m, fallbackTitle) => findMal([m?.ot, m?.t, fallbackTitle], m?.y, SERIESLIKE);
+const MOVIELIKE = new Set(['Movie', 'OVA', 'Special', 'TV Special', 'ONA']);
+
+// ---- titolo romaji degli anime (es. «Shingeki no Kyojin»), al posto dell'originale in giapponese ----
+// È il titolo principale di MyAnimeList. Sul telefono in `vds.mal.ro` (trovato 180 giorni, no 14).
+const RO_HIT = 180 * DAY;
+const RO_MISS = 14 * DAY;
+let roMem = null;
+const roCache = () => (roMem ||= LS.get('vds.mal.ro', {}) || {});
+function saveRo(key, r) {
+  const all = roCache();
+  all[key] = { r: r || '', at: Date.now() };
+  LS.set('vds.mal.ro', all);
+}
+export function romajiOf(key) { return roCache()[key]?.r || ''; }
+const roTried = new Set();
+// Cerca il romaji di `key` se non c'è ancora; `done` ridisegna. Per le serie lo trova «Film e OVA»
+// (si legge dalla serie già trovata); per i film una ricerca su MyAnimeList.
+export function ensureRomaji(key, { ot, t, y }, done) {
+  const c = roCache()[key];
+  if ((c && Date.now() - c.at < (c.r ? RO_HIT : RO_MISS)) || roTried.has(key)) return;
+  const [type] = key.split(':');
+  if (type === 'tv') {
+    const fr = cachedFranchise(key);
+    const n = fr?.start ? nodeCache()[fr.start] : null;
+    if (n?.ro) { roTried.add(key); saveRo(key, n.ro); done(); }
+    return; // altrimenti lo salva fetchFranchise
+  }
+  roTried.add(key);
+  findMal([ot, t], Number(y) || null, MOVIELIKE)
+    .then((n) => { saveRo(key, n?.ro || ''); done(); })
+    .catch(() => {});
+}
+
+// ---- ricerca in qualunque lingua (romaji, inglese, giapponese) ----
+// I primi anime che MyAnimeList trova per `q`, collegati a TMDB: [{ key, t, p, year, names }] nell'ordine
+// di MyAnimeList. Salva anche il loro romaji.
+export async function searchMal(q) {
+  if (jikanDown()) return null;
+  const d = await jikan(`/anime?q=${encodeURIComponent(q)}&limit=10`);
+  const hits = (d?.data || []).map(slim).filter((n) => !n.adult && (SERIESLIKE.has(n.type) || n.type === 'Movie')).slice(0, 4);
+  const out = await Promise.all(hits.map(async (n) => {
+    try {
+      const t = await mapToTmdb(n);
+      if (!t) return null;
+      if (n.ro) saveRo(t.key, n.ro);
+      return { key: t.key, t: t.t, p: t.p, year: n.year, names: titles(n) };
+    } catch { return null; }
+  }));
+  return out.filter(Boolean);
 }
 
 // Tutti i film/OVA/speciali (e gli spin-off) collegati alla serie TMDB `key` (es. «tv:31910»), in ordine
@@ -161,6 +213,7 @@ export async function fetchFranchise(key, m, fallbackTitle) {
   const tvId = Number(key.split(':')[1]);
   const found = await findStart(m, fallbackTitle);
   if (!found) return { v: FR_VER, at: Date.now(), items: [], none: true };
+  if (found.ro) saveRo(key, found.ro);
   const nodes = new Map();
   const same = new Set([found.id]); // parti di MyAnimeList che su TMDB sono questa stessa serie
   const rels = new Map(); // id -> relazioni con cui è arrivato
