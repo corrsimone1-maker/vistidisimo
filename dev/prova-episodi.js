@@ -31,7 +31,8 @@ const DARK = 70523; // Dark: rivista 3 volte, ogni episodio visto 4 volte
   const check = (label, ok) => { console.log(`${ok ? 'ok ' : 'NO '} ${label}`); if (!ok) errors.push('fallita: ' + label); };
   const base = 'http://127.0.0.1:8135/vistidisimo/';
 
-  // 1. una serie in corso ferma da più di 60 giorni: «Dove eravamo rimasti»
+  // 1. una serie in corso ferma da più di 60 giorni: niente riquadro «Dove eravamo rimasti» (tolto il
+  //    3/11/2026), solo il pulsante del ripasso come per le altre
   const lib0 = remote();
   const lastDay = (it) => Object.values(it.eps || {}).flatMap((x) => Object.values(x)).filter(Boolean).sort().pop() || (it.last || '').slice(0, 10);
   const old = new Date(Date.now() - 61 * 86400000).toISOString().slice(0, 10);
@@ -39,8 +40,8 @@ const DARK = 70523; // Dark: rivista 3 volte, ogni episodio visto 4 volte
   await page.goto(base + `#/t/${ferma.replace(':', '/')}`);
   await page.waitForSelector('.d-head');
   await page.waitForTimeout(1500);
-  check(`riquadro «Dove eravamo rimasti» dopo una pausa lunga (${lib0[ferma].title})`, await page.$('.resume') != null);
-  console.log('   ', await text('.resume'));
+  check(`niente riquadro «Dove eravamo rimasti» (${lib0[ferma].title})`, !/Dove eravamo rimasti/i.test(await text('#view')));
+  check('pulsante del ripasso dalla stagione dell’ultimo visto', /^#\/ripasso\/\d+\/\d+$/.test(await page.$eval('.d-rp', (a) => a.getAttribute('href')).catch(() => '')));
   await shot('e00-dove-eravamo');
 
   // pagina di una serie con episodi rivisti nella stagione 1 (scelta dai dati veri: Simo li cambia);

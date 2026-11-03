@@ -1,11 +1,11 @@
-import { html, raw, icon, img, fmtRating, fmtDay, today, daysBetween, statusLabel, openSheet, confirmSheet, promptSheet, toast, kindBadge, tube, esc, fmtClock } from '../ui.js';
+import { html, raw, icon, img, fmtRating, fmtDay, today, statusLabel, openSheet, confirmSheet, promptSheet, toast, kindBadge, tube, esc, fmtClock } from '../ui.js';
 import { item, metaOf, lib, putMeta, scheduleMetaSave } from '../store.js';
 import { fetchDetails, fetchImages, metaFromDetails, tmdbToken, movieDirectors, fetchTrailer } from '../tmdb.js';
-import { isAnime, isAnimeResult, progress, isWatched, isAired, epRange, watchedCount, airedCount, nextEpisode, rewatchOf, furthest, lastWatchDate, unwatchedAired } from '../derive.js';
+import { isAnime, isAnimeResult, progress, isWatched, isAired, epRange, watchedCount, airedCount, nextEpisode, rewatchOf, furthest, unwatchedAired } from '../derive.js';
 import * as A from '../actions.js';
 import { getSeason } from './upcoming.js';
 import { titleOf, seenTitles } from './common.js';
-import { agoText, watchedEpisodeSheet } from './episode.js';
+import { watchedEpisodeSheet } from './episode.js';
 import { openPauseEditor, pauseText } from './menu.js';
 import { franchiseSection } from './franchise.js';
 import { sagaSection } from './saga.js';
@@ -140,26 +140,12 @@ function seasonBlock(key, it, m, s) {
   </div>`;
 }
 
-// «Dove eravamo rimasti»: dopo una pausa lunga (60 giorni) un riquadro in evidenza porta al ripasso
-// degli episodi visti; altrimenti basta un pulsante.
-const LONG_BREAK = 60;
-function resumeHtml(key, it, m) {
+// Pulsante per il ripasso degli episodi visti, dalla stagione dell'ultimo visto. (Il riquadro in evidenza
+// «Dove eravamo rimasti» dopo una pausa lunga è stato tolto il 3/11/2026: portava allo stesso ripasso.)
+function resumeHtml(key, it) {
   if (!it || it.type !== 'tv' || !watchedCount(it)) return '';
   const id = key.split(':')[1];
-  const [fs, fe] = furthest(it);
-  const last = lastWatchDate(it);
-  const gap = last ? daysBetween(last, today()) : 0;
-  // solo per le serie che stai seguendo: su quelle finite da anni sarebbe rumore
-  if (gap >= LONG_BREAK && (it.status === 'watching' || it.status === 'uptodate')) {
-    const more = nextEpisode(it, m);
-    const ne = m?.ne && m.ne[2] && m.ne[2] >= today() ? m.ne : null;
-    const then = more ? `Poi riprendi da S${more.s} · E${more.e}` : (ne ? `Il prossimo esce il ${fmtDay(ne[2], { year: false })}` : '');
-    return html`<a class="resume" href="#/ripasso/${id}/${fs}">
-      <span class="resume-k">Dove eravamo rimasti</span>
-      <b>Ultimo visto S${fs} · E${fe}, ${agoText(last)}</b>
-      ${then ? html`<small>${then}</small>` : ''}
-    </a>`;
-  }
+  const [fs] = furthest(it);
   return html`<a class="btn ghost wide d-rp" href="#/ripasso/${id}/${fs}">${icon.list}Ripassa gli episodi visti</a>`;
 }
 
@@ -302,7 +288,7 @@ export function renderDetail(type, id, rerender) {
       </button>` : ''}
     ${d?.overview ? html`<p class="overview">${d.overview}</p>` : (cur.err ? html`<p class="muted pad">${cur.err}</p>` : '')}
     ${facts.length ? html`<dl class="facts">${facts.map(([k, v]) => html`<div><dt>${k}</dt><dd>${v}</dd></div>`)}</dl>` : ''}
-    ${resumeHtml(key, it, m)}
+    ${resumeHtml(key, it)}
     ${seasonsHtml}
     ${type === 'tv' && anime ? franchiseSection(key, it, m, it?.title || title, rerender) : ''}
     ${co ? sagaSection(co, rerender) : ''}
