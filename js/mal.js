@@ -1,10 +1,12 @@
-// Film, OVA, speciali e spin-off di un anime, da MyAnimeList (tramite Jikan, vedi js/jikan.js).
+// Film, OVA, speciali, spin-off e serie prima e dopo di un anime, da MyAnimeList (tramite Jikan, vedi
+// js/jikan.js), per la «Collezione» della serie (js/views/collezione.js).
 //
 // TMDB non collega una serie anime ai suoi film e OVA; MyAnimeList sì, con le «relazioni» (seguito,
 // prequel, storia parallela, spin-off…). Qui si trova l'anime su MyAnimeList, si seguono le relazioni e
-// ogni film/OVA trovato si collega al titolo TMDB corrispondente (così si sa se è in libreria e si apre
-// nell'app). Si seguono solo le parti della stessa serie: il prequel o il seguito che su TMDB è un'altra
-// serie (Naruto → Naruto Shippuden → Boruto) non si allarga, ma i film collegati direttamente restano.
+// ogni voce trovata si collega al titolo TMDB corrispondente (così si sa se è in libreria e si apre
+// nell'app). Si allargano solo le parti della stessa serie: il prequel o il seguito che su TMDB è
+// un'altra serie (Naruto → Naruto Shippuden → Boruto) si mostra ma non si allarga, e i film collegati
+// direttamente restano.
 //
 // MyAnimeList non dice il tipo (film, OVA, serie) di un titolo collegato: ogni voce si scarica a parte
 // (`/anime/{id}/full`, che porta anche le sue relazioni). Per questo le voci restano sul telefono 30
@@ -19,7 +21,7 @@ const FR_TTL = 7 * DAY; // elenco dei film e OVA di una serie
 const NODE_TTL = 30 * DAY; // una voce di MyAnimeList (titoli, tipo, data, relazioni)
 const HIT_TTL = 120 * DAY; // collegamento a TMDB trovato
 const MISS_TTL = 14 * DAY; // non trovato: si riprova dopo un po'
-const FR_VER = 1;
+const FR_VER = 2;
 const MAX_NODES = 80; // voci scaricate al massimo per una serie
 
 // cache di una versione precedente di «Film e OVA», non più usate: si tolgono dal telefono
@@ -28,10 +30,12 @@ for (const k of ['vds.al.fr', 'vds.al.map']) LS.del(k);
 // relazioni (nomi di MyAnimeList) che allargano la ricerca e relazioni che si mostrano soltanto
 const FOLLOW = new Set(['Sequel', 'Prequel', 'Parent Story', 'Side Story']);
 const LEAF = new Set(['Spin-Off', 'Summary', 'Alternative Version', 'Alternative Setting']);
-// formati che si mostrano (le serie TV della stessa saga sono le stagioni della serie stessa)
+// formati che si mostrano sempre
 const SHOW = new Set(['Movie', 'OVA', 'ONA', 'Special', 'TV Special']);
-// le serie TV si mostrano solo se sono uno spin-off (o una storia parallela) che su TMDB è un'altra
-// serie: Magia Record in Madoka Magica (chiesto da Simo, 3/11/2026)
+// le serie TV si mostrano se su TMDB sono un'altra serie (quelle che su TMDB sono questa stessa serie
+// sono sue stagioni): seguiti e prequel («Serie»), spin-off e storie parallele («Spin-off», es. Magia
+// Record in Madoka Magica, chiesto da Simo il 3/11/2026). Uno spin-off che TMDB non ha resta come link
+// a MyAnimeList; un seguito che TMDB non ha no (di solito è una stagione che non si è riusciti a collegare).
 const SPIN_TV = new Set(['Spin-Off', 'Side Story']);
 const SERIESLIKE = new Set(['TV', 'ONA']);
 export const FORMAT_LABEL = { Movie: 'Film', OVA: 'OVA', ONA: 'ONA', Special: 'Speciale', 'TV Special': 'Speciale', TV: 'Spin-off' };
@@ -205,10 +209,11 @@ export async function searchMal(q) {
   return out.filter(Boolean);
 }
 
-// Tutti i film/OVA/speciali (e gli spin-off) collegati alla serie TMDB `key` (es. «tv:31910»), in ordine
-// di uscita. Risultato: { v, at, start, mal, items: [{ id, f, d, t, c, u, rel, key, tt, tp }] } — id e
-// pagina (u) di MyAnimeList, f tipo, d data, t titolo (inglese o romaji), c copertina, key/tt/tp titolo
-// TMDB se trovato; mal = id MyAnimeList delle parti che su TMDB sono questa stessa serie (per i filler).
+// Tutti i film/OVA/speciali, gli spin-off e le serie prima e dopo collegati alla serie TMDB `key` (es.
+// «tv:31910»), in ordine di uscita. Risultato: { v, at, start, mal, items: [{ id, f, l, d, t, c, u, rel,
+// key, tt, tp }] } — id e pagina (u) di MyAnimeList, f tipo, l etichetta («Film», «OVA», «Serie»,
+// «Spin-off»…), d data, t titolo (inglese o romaji), c copertina, key/tt/tp titolo TMDB se trovato;
+// mal = id MyAnimeList delle parti che su TMDB sono questa stessa serie (per i filler).
 export async function fetchFranchise(key, m, fallbackTitle) {
   const tvId = Number(key.split(':')[1]);
   const found = await findStart(m, fallbackTitle);
@@ -254,9 +259,11 @@ export async function fetchFranchise(key, m, fallbackTitle) {
   // voci viste solo come relazione (spin-off, riassunti…): servono tipo, titolo, data e copertina
   await Promise.all([...rels.keys()].map(load));
   const list = [...rels.keys()].map((id) => nodes.get(id)).filter((n) => n && !n.adult && !same.has(n.id)
-    && (SHOW.has(n.type) || (n.type === 'TV' && [...rels.get(n.id)].some((r) => SPIN_TV.has(r)))));
+    && (SHOW.has(n.type) || n.type === 'TV'));
+  const spinOf = (n) => n.type === 'TV' && ![...rels.get(n.id)].some((r) => r === 'Sequel' || r === 'Prequel') && [...rels.get(n.id)].some((r) => SPIN_TV.has(r));
   const items = list.map((n) => ({
     id: n.id, f: n.type, d: n.date, t: n.en || n.ro || n.ja || '', c: n.img, u: n.url, rel: [...rels.get(n.id)][0],
+    l: n.type === 'TV' ? (spinOf(n) ? 'Spin-off' : 'Serie') : (FORMAT_LABEL[n.type] || n.type),
   }));
   // collegamento a TMDB, 4 alla volta
   const drop = new Set();
@@ -268,6 +275,7 @@ export async function fetchFranchise(key, m, fallbackTitle) {
         const t = await mapToTmdb(list[idx]);
         if (t && t.key !== `tv:${tvId}`) Object.assign(items[idx], { key: t.key, tt: t.t, tp: t.p });
         else if (t && list[idx].type === 'TV') drop.add(idx); // è questa serie, non uno spin-off
+        else if (!t && list[idx].type === 'TV' && !spinOf(list[idx])) drop.add(idx);
       } catch { /* resta senza */ }
     }
   };

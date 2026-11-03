@@ -78,9 +78,9 @@ export function fmtRating(r) { return r == null ? '' : Number(r).toFixed(1); }
 // Una locandina: immagine, iconcina film/serie, voto e tubo di stato sotto.
 // paused: pallino rosso in alto a destra (episodio o film lasciato a metà).
 export function posterCard(c) {
-  // c: { href, title, poster, kind, status, progress, rating, extra, removable, key, paused, ext }
-  // ext: link a un altro sito (si apre fuori dall'app)
-  return html`<a class="pc" href="${c.href}" ${c.key ? raw(`data-key="${esc(c.key)}"`) : ''} ${c.ext ? raw('target="_blank" rel="noopener"') : ''}>
+  // c: { href, title, poster, kind, status, progress, rating, extra, removable, key, paused, ext, here }
+  // ext: link a un altro sito (si apre fuori dall'app); here: il titolo che stai guardando (Collezione)
+  return html`<a class="pc${c.here ? ' here' : ''}" href="${c.href}" ${c.key ? raw(`data-key="${esc(c.key)}"`) : ''} ${c.ext ? raw('target="_blank" rel="noopener"') : ''}>
     <div class="pc-img">
       ${c.poster ? html`<img loading="lazy" decoding="async" src="${img(c.poster)}" alt="">` : html`<div class="pc-ph"><span>${c.title}</span></div>`}
       ${kindBadge(c.kind)}

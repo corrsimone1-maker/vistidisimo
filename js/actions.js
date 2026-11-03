@@ -204,6 +204,36 @@ export function removeItem(key) {
 // ---- liste ----
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2));
 
+// ---- collezione ----
+// Collega a mano `other` a `key` (key è in libreria). Vale in tutte e due le direzioni.
+export function linkTitle(key, other, otherTitle) {
+  const it = item(key);
+  if (!it || other === key) return;
+  dispatch({ op: 'link', key, add: [other], msg: `${it.title}: collega ${otherTitle || other} alla collezione` });
+}
+// Toglie `other` dalla collezione di `key`: un collegamento fatto a mano si toglie (da qualunque dei
+// due lati sia stato fatto), uno automatico si nasconde.
+export function unlinkTitle(key, other, { manual, otherTitle } = {}) {
+  const it = item(key);
+  const ops = [];
+  if (manual) {
+    if (it?.links?.includes(other)) ops.push({ op: 'link', key, rm: [other] });
+    if (item(other)?.links?.includes(key)) ops.push({ op: 'link', key: other, rm: [key] });
+  } else if (it) ops.push({ op: 'link', key, hide: [other] });
+  if (!ops.length) return;
+  ops[0].msg = `${it?.title || item(other)?.title || key}: toglie ${otherTitle || other} dalla collezione`;
+  dispatch(ops);
+}
+// Rimette un collegamento automatico nascosto (da qualunque dei due lati sia stato nascosto).
+export function unhideTitle(key, other, otherTitle) {
+  const ops = [];
+  if (item(key)?.nolinks?.includes(other)) ops.push({ op: 'link', key, show: [other] });
+  if (item(other)?.nolinks?.includes(key)) ops.push({ op: 'link', key: other, show: [key] });
+  if (!ops.length) return;
+  ops[0].msg = `${item(key)?.title || key}: rimette ${otherTitle || other} nella collezione`;
+  dispatch(ops);
+}
+
 export function createList(title) {
   const id = uid();
   dispatch({ op: 'lnew', id, title, at: nowIso(), msg: `Nuova lista ${title}` });

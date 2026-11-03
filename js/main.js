@@ -11,13 +11,13 @@ import { renderLists, renderList, listActions, initReorder } from './views/lists
 import { renderSettings, settingsActions } from './views/settings.js';
 import { checkNewSeasons } from './views/newseason.js';
 import { renderSaga, renderSagas } from './views/saga.js';
-import { renderFranchise } from './views/franchise.js';
+import { renderCollezione, collezioneActions } from './views/collezione.js';
 
 const view = document.getElementById('view');
 const scrollMem = new Map();
 const TAB_OF = { home: 'home', raccolta: 'home', liste: 'home', lista: 'home', impostazioni: 'home', libreria: 'libreria', saghe: 'libreria', cerca: 'cerca', prossimi: 'prossimi' };
 // schede di dettaglio: restano sulla scheda della barra da cui le hai aperte
-const DETAIL = new Set(['t', 'ep', 'ripasso', 'persona', 'saga', 'extra']);
+const DETAIL = new Set(['t', 'ep', 'ripasso', 'persona', 'saga', 'extra', 'collezione']);
 const KEEP_SCROLL = new Set(['home', 'raccolta', 'liste', 'lista', 'libreria', 'saghe', 'cerca', 'prossimi']);
 let lastTab = 'home';
 let navDepth = 0;
@@ -44,7 +44,9 @@ function renderRoute() {
     case 'persona': out = renderPerson(Number(r.parts[1]), rerender); break;
     case 'saga': out = renderSaga(Number(r.parts[1]), rerender); break;
     case 'saghe': out = renderSagas(rerender); break;
-    case 'extra': out = renderFranchise(Number(r.parts[1]), rerender); break;
+    case 'collezione': out = renderCollezione(r.parts[1] === 'movie' ? 'movie' : 'tv', Number(r.parts[2]), rerender); break;
+    // vecchio indirizzo di «Film e OVA» degli anime
+    case 'extra': out = renderCollezione('tv', Number(r.parts[1]), rerender); break;
     case 'ripasso': out = renderRipasso(Number(r.parts[1]), r.parts[2] == null ? null : Number(r.parts[2]), rerender); break;
     case 'liste': out = renderLists(); break;
     case 'lista': out = renderList(decodeURIComponent(r.parts[1] || '')); break;
@@ -130,7 +132,7 @@ const go = (hash) => { location.hash = hash; };
 const back = () => { if (navDepth > 0 && history.length > 1) { navDepth -= 2; history.back(); } else location.hash = '#/home'; };
 
 const ACTIONS = {
-  ...libraryActions, ...searchActions, ...upcomingActions, ...detailActions, ...episodeActions, ...listActions, ...settingsActions,
+  ...libraryActions, ...searchActions, ...upcomingActions, ...detailActions, ...episodeActions, ...listActions, ...settingsActions, ...collezioneActions,
   back: () => back(),
 };
 const INPUTS = { ...libraryInputs, ...searchInputs };

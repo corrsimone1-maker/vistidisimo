@@ -104,6 +104,17 @@ function applyOp(doc, op) {
       // (o riceverne una vecchia da un altro dispositivo) non fa riapparire un avviso.
       if (it && op.n > (it.announced || 0)) it.announced = op.n;
       break;
+    case 'link': {
+      // Collezione: titoli collegati a mano (`links`) e collegamenti automatici nascosti (`nolinks`).
+      // add/rm/hide/show: aggiungere quello che c'è già o togliere quello che non c'è non cambia niente,
+      // così riapplicarla due volte dà lo stesso risultato.
+      if (!it) break;
+      const drop = (f, ks) => { if (!it[f] || !ks?.length) return; it[f] = it[f].filter((k) => !ks.includes(k)); if (!it[f].length) delete it[f]; };
+      const put = (f, ks) => { const cur = it[f] || []; for (const k of ks || []) if (k !== op.key && !cur.includes(k)) cur.push(k); if (cur.length) it[f] = cur; };
+      drop('links', op.rm); drop('nolinks', op.add); put('links', op.add);
+      drop('nolinks', op.show); drop('links', op.hide); put('nolinks', op.hide);
+      break;
+    }
     case 'lnew':
       if (!doc.lists.some((l) => l.id === op.id)) doc.lists.push({ id: op.id, title: op.title, added: op.at, items: [] });
       break;

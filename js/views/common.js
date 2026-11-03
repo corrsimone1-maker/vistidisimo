@@ -15,7 +15,7 @@ export const titleOf = (key, it, m) => {
 
 // Locandina di un titolo della libreria (o di una lista).
 // withTitle: titolo piccolo sotto la locandina (griglie della Libreria, «Tutte» e liste; non in Home).
-export function cardFor(key, { fallback, removable = false, extra, withTitle = false } = {}) {
+export function cardFor(key, { fallback, removable = false, extra, withTitle = false, here = false } = {}) {
   const it = item(key);
   const m = metaOf(key);
   const type = key.split(':')[0];
@@ -33,6 +33,7 @@ export function cardFor(key, { fallback, removable = false, extra, withTitle = f
     removable,
     extra,
     paused: !!it?.pause,
+    here,
   });
 }
 

@@ -19,8 +19,8 @@ Le serie e i film che ho visto. Web app personale (GitHub Pages) che sostituisce
 - **Episodio**: tocca il titolo di un episodio per trama (italiano, se manca inglese, se manca spagnolo), tutti i fotogrammi di TMDB e quante volte l'hai visto. Se non l'hai ancora visto, trama e immagini restano velate finché non tocchi.
 - **Ripasso**: gli episodi già visti di una stagione, uno dopo l'altro con immagine e trama, per ricordarsi dove eravamo rimasti. Dopo una pausa lunga la pagina della serie lo propone da sola.
 - **Registi**: nella pagina di un film tocca il nome del regista per vedere tutti i suoi film, dal più recente, senza cortometraggi, con quelli che hai già visto.
-- **Saghe**: nella pagina di un film la riga della saga con tutti i suoi film in ordine di uscita; dal menu ≡ della Libreria, «Saghe» elenca quelle dei tuoi film con la percentuale vista.
-- **Film e OVA** degli anime: nella pagina di una serie anime, i suoi film, OVA, speciali e spin-off in ordine di uscita (da [MyAnimeList](https://myanimelist.net) tramite [Jikan](https://jikan.moe)), con quelli che hai già visto, e se ha episodi filler.
+- **Collezione**: nella pagina di ogni serie e film, tutto quello che è collegato in ordine di uscita — la saga, seguiti, prequel, spin-off e franchise (da [Wikidata](https://www.wikidata.org)), i titoli con lo stesso nome («Vis a vis» → «Vis a vis: El oasis»), per gli anime film, OVA, speciali e spin-off (da [MyAnimeList](https://myanimelist.net) tramite [Jikan](https://jikan.moe)) — più i collegamenti fatti a mano. Per gli anime, anche se ha episodi filler.
+- **Saghe**: dal menu ≡ della Libreria, «Saghe» elenca quelle dei tuoi film con la percentuale vista.
 - **Nuova stagione**: quando esce una stagione nuova di una serie che segui, all'apertura compare una finestra (una volta sola).
 - **Mancano** e **Trailer**: nella pagina di una serie quanti episodi e quanto tempo mancano; il trailer di TMDB, se c'è.
 - **Esporta per altre app** (Impostazioni): film per Letterboxd, tutto per Simkl. Il backup completo resta `library.json`.
@@ -36,9 +36,10 @@ La barra sotto ogni locandina si riempie con l'avanzamento e ha il colore dello 
 - `js/actions.js` — azioni dell'utente
 - `js/tmdb.js` — TMDB
 - `js/jikan.js`, `js/mal.js`, `js/filler.js` — MyAnimeList tramite Jikan: film, OVA e spin-off degli anime, filler
+- `js/wikidata.js`, `js/collection.js`, `js/views/collezione.js` — Collezione
 - `js/views/` — le schermate
 - `sw.js`, `manifest.webmanifest`, `icons/` — installazione sulla schermata Home
 - `dev/` — prove automatiche con API finte (non fanno parte dell'app)
 - `CLAUDE.md` — istruzioni per Claude, per lavorarci da altre chat
 
-Font: Unbounded e Manrope (SIL Open Font License). Dati e immagini da TMDB: questa app usa l'API di TMDB ma non è approvata né certificata da TMDB. Film, OVA e filler degli anime da MyAnimeList, tramite Jikan (non affiliato a MyAnimeList).
+Font: Unbounded e Manrope (SIL Open Font License). Dati e immagini da TMDB: questa app usa l'API di TMDB ma non è approvata né certificata da TMDB. Film, OVA e filler degli anime da MyAnimeList, tramite Jikan (non affiliato a MyAnimeList). Collegamenti tra titoli anche da Wikidata (dati CC0).

@@ -54,7 +54,8 @@ const OUT = process.argv[2] || require('os').tmpdir();
   console.log('   ', lb.name, lbRows.length - 1, 'righe |', lbRows[0].join(','), '|', lbRows[1].join(' | '));
   check('Letterboxd: intestazione giusta', lbRows[0].join(',') === 'tmdbID,imdbID,Title,Year,WatchedDate,Rating10,Rewatch');
   check(`Letterboxd: un film visto per riga (${films.length})`, lbRows.length - 1 === films.length);
-  check('Letterboxd: tmdbID numerici, date YYYY-MM-DD, voti interi 1–10', lbRows.slice(1).every((r) => /^\d+$/.test(r[0]) && /^\d{4}-\d{2}-\d{2}$/.test(r[4]) && (r[5] === '' || (/^\d+$/.test(r[5]) && +r[5] >= 1 && +r[5] <= 10))));
+  // data vuota per i film visti in un giorno che non si sa (Tokyo Ghoul: Pinto, aggiunto il 3/11/2026): Letterboxd lo segna visto senza diario
+  check('Letterboxd: tmdbID numerici, date YYYY-MM-DD (o vuote), voti interi 1–10', lbRows.slice(1).every((r) => /^\d+$/.test(r[0]) && (r[4] === '' || /^\d{4}-\d{2}-\d{2}$/.test(r[4])) && (r[5] === '' || (/^\d+$/.test(r[5]) && +r[5] >= 1 && +r[5] <= 10))));
   check('Letterboxd: niente BOM e meno di 1 MB', !lb.text.startsWith('﻿') && Buffer.byteLength(lb.text) < 1e6);
   const howl = lbRows.find((r) => r[0] === '4935');
   check(`Letterboxd: voto di Howl ${lib['movie:4935'].rating} → ${howl?.[5]}`, howl && (lib['movie:4935'].rating == null ? howl[5] === '' : +howl[5] === Math.round(lib['movie:4935'].rating)));

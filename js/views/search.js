@@ -3,6 +3,7 @@ import { tm, tmdbToken, nonLatin } from '../tmdb.js';
 import { item, metaOf, LS } from '../store.js';
 import { isAnimeResult, progress } from '../derive.js';
 import { searchMal, romajiOf, norm, sim } from '../mal.js';
+import { stemText } from '../collection.js';
 import { emptyState } from './common.js';
 
 // aka: altri titoli (romaji, inglese, giapponese) dei risultati trovati anche su MyAnimeList
@@ -100,23 +101,38 @@ async function loadTrending() {
   paint();
 }
 
-// Quanto un risultato corrisponde a quello che hai scritto, in qualunque lingua: titolo italiano, inglese,
-// originale e (per gli anime) romaji. Uguale 1, comincia così ~0,9, lo contiene 0,75, se no somiglianza.
-function score(r, q) {
-  const qn = norm(q);
-  const key = keyOf(r);
-  const names = [r.title || r.name, st.en.get(key)?.title, r.original_title || r.original_name, romajiOf(key), ...(st.aka.get(key) || [])];
+// Quanto uno dei titoli (italiano, inglese, originale, romaji…) corrisponde a quello che hai scritto:
+// uguale 1, comincia con quelle parole 0,85, le contiene 0,8, comincia o le contiene a metà parola
+// («Berlinoises» per «berlino») 0,6 / 0,55, se no la somiglianza × 0,5.
+export function textScore(names, q) {
+  const qw = stemText(q);
+  if (!qw) return 0;
+  const qj = qw.replace(/ /g, '');
   let best = 0;
   for (const n of names) {
-    const x = norm(n);
-    if (!x || !qn) continue;
-    const s = x === qn ? 1 : x.startsWith(qn) ? 0.9 - Math.min(0.1, (x.length - qn.length) / 200) : x.includes(qn) ? 0.75 : 0.7 * sim(n, q);
+    const x = stemText(n);
+    if (!x) continue;
+    let s;
+    if (x === qw || x.replace(/ /g, '') === qj) s = 1;
+    else if (x.startsWith(qw + ' ')) s = 0.85;
+    else if ((' ' + x + ' ').includes(' ' + qw + ' ')) s = 0.8;
+    else if (x.startsWith(qw)) s = 0.6;
+    else if (x.includes(qw)) s = 0.55;
+    else s = 0.5 * sim(n, q);
     if (s > best) best = s;
   }
   return best;
 }
-// Prima quello che corrisponde meglio; a parità, il più seguito (popolarità di TMDB).
-const rank = (r, q) => score(r, q) + 0.05 * Math.min(1, Math.log10(1 + (r.popularity || 0)) / 3);
+// Quanto è conosciuto un titolo: popolarità e numero di voti su TMDB (scala logaritmica, da 0 a 1).
+const lg = (v, top) => Math.min(1, Math.log10(1 + Math.max(0, v || 0)) / Math.log10(1 + top));
+const quality = (r) => 0.6 * lg(r.popularity, 500) + 0.4 * lg(r.vote_count, 20000);
+// Ordine dei risultati (come nelle app normali: «berlino» dà prima «Berlino e la dama con l'ermellino»,
+// non un film sconosciuto che si chiama proprio «Berlino»): corrispondenza del titolo 55%, quanto è
+// conosciuto 35%, posizione data da TMDB 10%; senza locandina un po' più giù.
+export function rankScore(r, q, names, pos = 0, n = 1) {
+  return 0.55 * textScore(names, q) + 0.35 * quality(r) + 0.1 * (1 - Math.min(1, pos / Math.max(1, n))) - (r.poster_path ? 0 : 0.1);
+}
+const namesOf = (r) => { const key = keyOf(r); return [r.title || r.name, st.en.get(key)?.title, r.original_title || r.original_name, romajiOf(key), ...(st.aka.get(key) || [])]; };
 
 // Gli anime trovati su MyAnimeList per la stessa ricerca (al massimo 2,5 secondi di attesa): così
 // «Shingeki no Kyojin» o «Attack on Titan» trovano la serie anche se TMDB non la mette in cima.
@@ -136,18 +152,19 @@ async function runSearch() {
     rememberEnglish([...(e1?.results || []), ...(e2?.results || [])]);
     const seen = new Set();
     const list = [...(p1?.results || []), ...(p2?.results || []), ...(e1?.results || [])].filter(keep).filter((r) => { const k = keyOf(r); if (seen.has(k)) return false; seen.add(k); return true; });
+    const nTmdb = list.length; // i risultati di MyAnimeList aggiunti dopo non hanno una posizione TMDB
     for (const h of mal || []) {
       st.aka.set(h.key, h.names);
       if (seen.has(h.key)) continue;
       // un anime che TMDB non ha dato: si aggiunge solo se il titolo corrisponde davvero
       const [type, id] = h.key.split(':');
-      const r = { id: Number(id), media_type: type, poster_path: h.p, genre_ids: [16], original_language: 'ja', origin_country: ['JP'], popularity: 0 };
+      // popolarità di un titolo medio: TMDB non l'ha data, ma MyAnimeList l'ha trovato
+      const r = { id: Number(id), media_type: type, poster_path: h.p, genre_ids: [16], original_language: 'ja', origin_country: ['JP'], popularity: 20 };
       if (type === 'movie') Object.assign(r, { title: h.t, release_date: h.year ? `${h.year}` : '' });
       else Object.assign(r, { name: h.t, first_air_date: h.year ? `${h.year}` : '' });
-      if (score(r, q) >= 0.75) { seen.add(h.key); list.push(r); }
+      if (textScore(namesOf(r), q) >= 0.75) { seen.add(h.key); list.push(r); }
     }
-    const order = new Map(list.map((r, i) => [keyOf(r), i]));
-    st.results = list.map((r) => ({ r, s: rank(r, q) })).sort((a, b) => b.s - a.s || order.get(keyOf(a.r)) - order.get(keyOf(b.r))).map((x) => x.r);
+    st.results = list.map((r, i) => ({ r, i, s: rankScore(r, q, namesOf(r), Math.min(i, nTmdb), nTmdb) })).sort((a, b) => b.s - a.s || a.i - b.i).map((x) => x.r);
     // se MyAnimeList arriva dopo, porta solo i romaji (l'ordine non cambia sotto le dita)
     if (!mal) malP.then((m) => { if (m && seq === st.seq) paint(); });
   } catch (e) { if (seq === st.seq) st.error = e.message; }

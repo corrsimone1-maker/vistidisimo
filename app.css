@@ -621,14 +621,17 @@ body:has(#sheet-root .sheet-wrap.in) #toast-root { bottom: auto; top: calc(var(-
 .person-count b { color: var(--testo); font-family: var(--f-disp); }
 .pc-year { display: block; margin-top: 1px; font: 600 11.5px var(--f-disp); color: var(--testo-3); }
 
-/* ---------- film e OVA degli anime, trailer ---------- */
+/* ---------- collezione, trailer ---------- */
 .d-fr { margin: 26px 0 0; }
 .fr-count { margin-left: 5px; color: var(--testo-3); font: 600 13px var(--f-disp); }
-.d-saga .row-head { gap: 12px; }
-.d-saga .row-all { flex: none; white-space: nowrap; }
-.sg-h { display: flex; align-items: baseline; min-width: 0; }
-.sg-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sg-h .fr-count { flex: none; }
+/* il titolo che stai guardando, dentro la sua collezione */
+.pc.here .pc-img { box-shadow: 0 0 0 2px var(--lilla), 0 0 14px rgba(201, 179, 255, .35); }
+.col-of { margin: -6px var(--gut) 12px; font: 650 15px/1.3 var(--f-disp); letter-spacing: -.02em; color: var(--testo-2); overflow-wrap: anywhere; }
+.ce-sheet .search-box { margin-top: 2px; }
+.ce-list { margin-top: 10px; max-height: 52vh; overflow-y: auto; overscroll-behavior: contain; }
+.ce-item { pointer-events: none; }
+.ce-label { margin: 14px 4px 4px; }
+.ce-tog.on { color: var(--lilla); }
 .trailer-btn {
   display: inline-flex; align-items: center; gap: 6px; height: 30px; margin-top: 10px; padding: 0 12px 0 10px; border-radius: 9px;
   background: rgba(255, 95, 210, .12); color: var(--rosa); font-weight: 800; font-size: 13px;

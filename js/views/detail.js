@@ -7,8 +7,7 @@ import { getSeason } from './upcoming.js';
 import { titleOf, seenTitles } from './common.js';
 import { watchedEpisodeSheet } from './episode.js';
 import { openPauseEditor, pauseText } from './menu.js';
-import { franchiseSection } from './franchise.js';
-import { sagaSection } from './saga.js';
+import { collectionSection, collectionEditSheet } from './collezione.js';
 import { fillerInfo } from '../filler.js';
 import { romajiOf, ensureRomaji, norm } from '../mal.js';
 
@@ -261,8 +260,9 @@ export function renderDetail(type, id, rerender) {
     const fl = anime ? fillerInfo(key) : null;
     if (fl?.f) facts.push(['Filler', html`<a class="person" href="${fl.u}" target="_blank" rel="noopener">Sì</a>`]);
   }
-  // saga (collezione TMDB) del film: riga come «Film e OVA» degli anime
-  const co = type === 'movie' ? (d ? (d.belongs_to_collection ? [d.belongs_to_collection.id, d.belongs_to_collection.name] : null) : m?.co) : null;
+  // saga (collezione TMDB) del film, per la Collezione: [id, nome], 0 = nessuna, undefined = non si sa ancora
+  const co = type === 'movie' ? (d ? (d.belongs_to_collection ? [d.belongs_to_collection.id, d.belongs_to_collection.name] : 0) : m?.co) : 0;
+  const colX = (d || m || it) ? { t: title, ot: d?.original_title || d?.original_name || m?.ot || '', l: d?.original_language || m?.l, y: Number(yr) || null, d: d?.release_date || d?.first_air_date || '', co, anime } : null;
 
   const seasonsHtml = type === 'tv' ? (() => {
     const list = seasonList(m);
@@ -298,8 +298,7 @@ export function renderDetail(type, id, rerender) {
     ${facts.length ? html`<dl class="facts">${facts.map(([k, v]) => html`<div><dt>${k}</dt><dd>${v}</dd></div>`)}</dl>` : ''}
     ${resumeHtml(key, it)}
     ${seasonsHtml}
-    ${type === 'tv' && anime ? franchiseSection(key, it, m, it?.title || title, rerender) : ''}
-    ${co ? sagaSection(co, rerender) : ''}
+    ${colX ? collectionSection(key, colX, rerender) : ''}
     <section class="d-sec">
       <h2>Liste</h2>
       ${inLists.length ? html`<div class="d-lists">${inLists.map((l) => html`<a class="chip-s link" href="#/lista/${encodeURIComponent(l.id)}">${l.title}</a>`)}</div>` : html`<p class="muted">Non è in nessuna lista.</p>`}
@@ -378,12 +377,14 @@ function moreSheet() {
       <button class="btn ghost" data-art="poster">${icon.image}Cambia copertina</button>
       <button class="btn ghost" data-art="backdrop">${icon.image}Cambia banner</button>
     </div>
-    <button class="btn ghost wide" data-pause>${icon.bookmark}${it.pause ? 'Cambia dove mi sono fermato' : 'Segna dove mi sono fermato'}</button>` : ''}
+    <button class="btn ghost wide" data-pause>${icon.bookmark}${it.pause ? 'Cambia dove mi sono fermato' : 'Segna dove mi sono fermato'}</button>
+    <button class="btn ghost wide" data-col>${icon.saga}Modifica la collezione</button>` : ''}
     <a class="btn ghost wide" href="https://www.themoviedb.org/${type}/${id}" target="_blank" rel="noopener">Apri su TMDB</a>
     ${it ? html`<button class="btn danger-ghost wide" data-remove>Rimuovi dalla libreria</button>` : ''}`), {
     onMount: (el, close) => {
       el.querySelectorAll('[data-art]').forEach((b) => { b.onclick = () => { close(); setTimeout(() => artworkSheet(key, b.dataset.art), 230); }; });
       el.querySelector('[data-pause]')?.addEventListener('click', () => { close(); setTimeout(() => openPauseEditor(key), 230); });
+      el.querySelector('[data-col]')?.addEventListener('click', () => { close(); setTimeout(() => collectionEditSheet(key), 230); });
       el.querySelectorAll('[data-anime]').forEach((b) => {
         b.onclick = () => { const v = b.dataset.anime; A.setAnime(key, v === 'auto' ? undefined : v === 'yes'); close(); };
       });
