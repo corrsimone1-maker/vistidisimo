@@ -1,11 +1,11 @@
-// Prova di saghe, film e OVA degli anime, «Mancano» e trailer, con i dati veri della libreria e TMDB/AniList finti:
+// Prova di saghe, film e OVA degli anime, «Mancano» e trailer, con i dati veri della libreria e TMDB/Jikan finti:
 // - saghe: campo `co` in meta.json (film riscaricati una volta), riga della saga nella pagina del film (come
 //   «Film e OVA»), pagina della saga (ordine di uscita, visti su usciti, in uscita), elenco «Saghe» dal menu ≡
 //   (prima quelle a metà);
-// - anime: Naruto Shippuden → film, OVA e spin-off da AniList, senza allargarsi a Naruto e Boruto (altre serie
-//   TMDB), collegati a TMDB quando c'è (stato dalla libreria), link ad AniList quando no, uno spin-off con due
-//   voci AniList → una carta, una storia parallela che è la serie stessa → niente carta, seconda apertura dalla
-//   cache, AniList che chiede di aspettare;
+// - anime: Naruto Shippuden → film, OVA e spin-off da MyAnimeList (Jikan), senza allargarsi a Naruto e Boruto
+//   (altre serie TMDB), collegati a TMDB quando c'è (stato dalla libreria), link a MyAnimeList quando no, uno
+//   spin-off con due voci → una carta, una storia parallela che è la serie stessa → niente carta, seconda
+//   apertura dalla cache, MyAnimeList che chiede di aspettare;
 // - filler: «Filler: Sì» da MyAnimeList (Jikan finto) solo se ce ne sono, con il link alla lista degli episodi;
 // - «Mancano N episodi · tempo» per una serie in corso; tasto Trailer (italiano, poi inglese) con il video in un foglio.
 const { chromium } = require('playwright');
@@ -41,33 +41,40 @@ const TM = [
   ['tv', 880020, 'Naruto SD: Rock Lee', 'NARUTO SD ロック・リーの青春フルパワー忍伝', '2012-04-03'], // spin-off
 ];
 
-// AniList finto: id → { format, y, native, english, romaji, rel: [[tipo, id]] }
-const AL = {
-  1735: { format: 'TV', y: 2007, native: 'NARUTO -ナルト- 疾風伝', english: 'Naruto Shippuden', romaji: 'Naruto: Shippuuden', mal: 1735, rel: [['PREQUEL', 20], ['SEQUEL', 97938], ['SIDE_STORY', 1736], ['SPIN_OFF', 12980], ['SIDE_STORY', 2472], ['SIDE_STORY', 4437], ['SIDE_STORY', 6325], ['SIDE_STORY', 13667], ['SIDE_STORY', 7001], ['SPIN_OFF', 12979], ['CHARACTER', 21], ['OTHER', 999], ['SUMMARY', 7002], ['ADAPTATION', 5000]] },
-  // una seconda parte che AniList tiene a sé ma su TMDB è la stessa serie: si allarga e non si mostra
-  1736: { format: 'TV', y: 2010, native: 'NARUTO -ナルト- 疾風伝', english: 'Naruto Shippuden', romaji: 'Naruto: Shippuuden 2', mal: 1736, rel: [['PREQUEL', 1735]] },
-  20: { format: 'TV', y: 2002, native: 'NARUTO -ナルト-', english: 'Naruto', romaji: 'Naruto', mal: 20, rel: [['SEQUEL', 1735], ['SIDE_STORY', 442]] },
-  97938: { format: 'TV', y: 2017, native: 'BORUTO-ボルト- NARUTO NEXT GENERATIONS', english: 'Boruto: Naruto Next Generations', romaji: 'Boruto: Naruto Next Generations', rel: [['PREQUEL', 1735], ['SIDE_STORY', 8888]] },
-  2472: { format: 'MOVIE', y: 2007, native: '劇場版 NARUTO -ナルト- 疾風伝', english: 'Naruto Shippuden the Movie', romaji: 'Naruto: Shippuuden Movie 1', rel: [['PARENT', 1735], ['SEQUEL', 4437]] },
-  4437: { format: 'MOVIE', y: 2008, native: '劇場版 NARUTO -ナルト- 疾風伝 絆', english: 'Naruto Shippuden the Movie: Bonds', romaji: 'Naruto: Shippuuden Movie 2 - Kizuna', rel: [['PARENT', 1735], ['PREQUEL', 2472], ['SEQUEL', 6325]] },
-  6325: { format: 'MOVIE', y: 2009, native: '劇場版 NARUTO -ナルト- 疾風伝 火の意志を継ぐ者', english: 'Naruto Shippuden the Movie: The Will of Fire', romaji: 'Naruto: Shippuuden Movie 3', rel: [['PARENT', 1735], ['PREQUEL', 4437]] },
-  13667: { format: 'MOVIE', y: 2014, native: 'THE LAST -NARUTO THE MOVIE-', english: 'The Last: Naruto the Movie', romaji: 'The Last: Naruto the Movie', rel: [['PARENT', 1735], ['SEQUEL', 21220]] },
-  21220: { format: 'MOVIE', y: 2015, native: 'BORUTO -NARUTO THE MOVIE-', english: 'Boruto: Naruto the Movie', romaji: 'Boruto: Naruto the Movie', rel: [['PREQUEL', 13667], ['SIDE_STORY', 7003]] },
-  7001: { format: 'OVA', y: 2010, native: 'NARUTO 疾風伝 OVA', english: null, romaji: 'Naruto: Shippuuden - Sunny Side Battle', rel: [['PARENT', 1735]] },
-  7002: { format: 'SPECIAL', y: 2009, native: 'NARUTO 疾風伝 総集編', english: null, romaji: 'Naruto Shippuuden: Recap', rel: [] },
-  7003: { format: 'ONA', y: 2016, native: 'BORUTO ミニ', english: null, romaji: 'Boruto Mini', rel: [] },
-  12979: { format: 'TV', y: 2012, native: 'NARUTO SD ロック・リーの青春フルパワー忍伝', english: 'Naruto Spin-Off: Rock Lee', romaji: 'Naruto SD', rel: [] },
-  12980: { format: 'TV', y: 2013, native: 'NARUTO SD ロック・リーの青春フルパワー忍伝 2', english: 'Naruto Spin-Off: Rock Lee 2', romaji: 'Naruto SD 2', rel: [] },
-  442: { format: 'MOVIE', y: 2004, native: '劇場版 NARUTO 大活劇! 雪姫忍法帖だってばよ!!', english: 'Naruto the Movie: Ninja Clash', romaji: 'Naruto Movie 1', rel: [] },
-  8888: { format: 'MOVIE', y: 2023, native: 'BORUTO 劇場版', english: 'Boruto Movie', romaji: 'Boruto Movie', rel: [] },
-  21: { format: 'TV', y: 1999, native: 'ONE PIECE', english: 'One Piece', romaji: 'One Piece', rel: [] },
-  999: { format: 'MUSIC', y: 2010, native: 'MV', english: 'MV', romaji: 'MV', rel: [] },
+// MyAnimeList finto (come lo dà Jikan): id → { type, y, ja, en, ro, rel: [[relazione, id]] }; 5000 è un manga
+const MAL = {
+  1735: { type: 'TV', y: 2007, ja: 'NARUTO -ナルト- 疾風伝', en: 'Naruto Shippuden', ro: 'Naruto: Shippuuden', rel: [['Prequel', 20], ['Sequel', 97938], ['Side Story', 1736], ['Spin-Off', 12980], ['Side Story', 2472], ['Side Story', 4437], ['Side Story', 6325], ['Side Story', 13667], ['Side Story', 7001], ['Spin-Off', 12979], ['Character', 21], ['Other', 999], ['Summary', 7002], ['Adaptation', 5000]] },
+  // una seconda parte che MyAnimeList tiene a sé ma su TMDB è la stessa serie: si allarga e non si mostra
+  1736: { type: 'TV', y: 2010, ja: 'NARUTO -ナルト- 疾風伝', en: 'Naruto Shippuden', ro: 'Naruto: Shippuuden 2', rel: [['Prequel', 1735]] },
+  20: { type: 'TV', y: 2002, ja: 'NARUTO -ナルト-', en: 'Naruto', ro: 'Naruto', rel: [['Sequel', 1735], ['Side Story', 442]] },
+  97938: { type: 'TV', y: 2017, ja: 'BORUTO-ボルト- NARUTO NEXT GENERATIONS', en: 'Boruto: Naruto Next Generations', ro: 'Boruto: Naruto Next Generations', rel: [['Prequel', 1735], ['Side Story', 8888]] },
+  2472: { type: 'Movie', y: 2007, ja: '劇場版 NARUTO -ナルト- 疾風伝', en: 'Naruto Shippuden the Movie', ro: 'Naruto: Shippuuden Movie 1', rel: [['Parent Story', 1735], ['Sequel', 4437]] },
+  4437: { type: 'Movie', y: 2008, ja: '劇場版 NARUTO -ナルト- 疾風伝 絆', en: 'Naruto Shippuden the Movie: Bonds', ro: 'Naruto: Shippuuden Movie 2 - Kizuna', rel: [['Parent Story', 1735], ['Prequel', 2472], ['Sequel', 6325]] },
+  6325: { type: 'Movie', y: 2009, ja: '劇場版 NARUTO -ナルト- 疾風伝 火の意志を継ぐ者', en: 'Naruto Shippuden the Movie: The Will of Fire', ro: 'Naruto: Shippuuden Movie 3', rel: [['Parent Story', 1735], ['Prequel', 4437]] },
+  13667: { type: 'Movie', y: 2014, ja: 'THE LAST -NARUTO THE MOVIE-', en: 'The Last: Naruto the Movie', ro: 'The Last: Naruto the Movie', rel: [['Parent Story', 1735], ['Sequel', 21220]] },
+  21220: { type: 'Movie', y: 2015, ja: 'BORUTO -NARUTO THE MOVIE-', en: 'Boruto: Naruto the Movie', ro: 'Boruto: Naruto the Movie', rel: [['Prequel', 13667], ['Side Story', 7003]] },
+  7001: { type: 'OVA', y: 2010, ja: 'NARUTO 疾風伝 OVA', en: null, ro: 'Naruto: Shippuuden - Sunny Side Battle', rel: [['Parent Story', 1735]] },
+  7002: { type: 'Special', y: 2009, ja: 'NARUTO 疾風伝 総集編', en: null, ro: 'Naruto Shippuuden: Recap', rel: [] },
+  7003: { type: 'ONA', y: 2016, ja: 'BORUTO ミニ', en: null, ro: 'Boruto Mini', rel: [] },
+  12979: { type: 'TV', y: 2012, ja: 'NARUTO SD ロック・リーの青春フルパワー忍伝', en: 'Naruto Spin-Off: Rock Lee', ro: 'Naruto SD', rel: [] },
+  12980: { type: 'TV', y: 2013, ja: 'NARUTO SD ロック・リーの青春フルパワー忍伝 2', en: 'Naruto Spin-Off: Rock Lee 2', ro: 'Naruto SD 2', rel: [] },
+  442: { type: 'Movie', y: 2004, ja: '劇場版 NARUTO 大活劇! 雪姫忍法帖だってばよ!!', en: 'Naruto the Movie: Ninja Clash', ro: 'Naruto Movie 1', rel: [] },
+  8888: { type: 'Movie', y: 2023, ja: 'BORUTO 劇場版', en: 'Boruto Movie', ro: 'Boruto Movie', rel: [] },
+  21: { type: 'TV', y: 1999, ja: 'ONE PIECE', en: 'One Piece', ro: 'One Piece', rel: [] },
+  999: { type: 'Music', y: 2010, ja: 'MV', en: 'MV', ro: 'MV', rel: [] },
 };
-const alMedia = (id, withRel) => {
-  const a = AL[id];
-  const m = { id: Number(id), idMal: a.mal ? 100000 + a.mal : null, type: 'ANIME', format: a.format, isAdult: false, startDate: { year: a.y, month: 8, day: 1 }, title: { romaji: a.romaji, english: a.english, native: a.native }, coverImage: { large: `https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/c_${id}.jpg` }, siteUrl: `https://anilist.co/anime/${id}` };
-  if (withRel) m.relations = { edges: a.rel.filter(([, t]) => AL[t] || t === 5000).map(([r, t]) => ({ relationType: r, node: t === 5000 ? { id: 5000, type: 'MANGA', format: 'MANGA', isAdult: false } : { id: t, type: 'ANIME', format: AL[t].format, isAdult: false } })) };
-  return m;
+const malAnime = (id, full) => {
+  const a = MAL[id];
+  const d = { mal_id: Number(id), url: `https://myanimelist.net/anime/${id}/Nome`, images: { jpg: { large_image_url: `https://cdn.myanimelist.net/images/anime/c_${id}.jpg` } }, title: a.ro, title_english: a.en, title_japanese: a.ja, type: a.type, aired: { from: `${a.y}-08-01T00:00:00+00:00` }, year: a.y, rating: 'PG-13 - Teens 13 or older' };
+  if (full) {
+    const groups = new Map();
+    for (const [r, t] of a.rel) {
+      if (!groups.has(r)) groups.set(r, []);
+      groups.get(r).push(t === 5000 ? { mal_id: 5000, type: 'manga', name: 'Naruto', url: 'https://myanimelist.net/manga/5000' } : { mal_id: t, type: 'anime', name: MAL[t]?.ro || '', url: `https://myanimelist.net/anime/${t}` });
+    }
+    d.relations = [...groups].map(([relation, entry]) => ({ relation, entry }));
+  }
+  return d;
 };
 
 (async () => {
@@ -82,8 +89,8 @@ const alMedia = (id, withRel) => {
   M.files['meta.json'] = fs.readFileSync(path.join(DATA, 'meta.json'), 'utf8'); M.shas['meta.json'] = 'meta0';
   // un film di Naruto in libreria (visto), per vedere lo stato nella riga «Film e OVA»
   { const d = JSON.parse(M.files['library.json']); d.items['movie:880003'] = { type: 'movie', id: 880003, title: 'Naruto Shippuden: Eredi della volontà del fuoco', year: 2009, status: 'completed', rating: null, added: '2020-01-01T10:00:00Z', last: '2020-01-02T10:00:00Z', fav: null, rewatch: 0, seen: '2020-01-02' }; M.files['library.json'] = JSON.stringify(d); }
-  const log = { al: 0, alBody: [], videos: [], search: 0, jikan: [] };
-  let alMode = 'ok';
+  const log = { mal: [], eps: [], videos: [], search: 0 };
+  let malMode = 'ok';
 
   const tmdbExtra = async (route) => {
     const u = new URL(route.request().url());
@@ -120,43 +127,43 @@ const alMedia = (id, withRel) => {
     }
     return M.tmdb(route);
   };
-  // Jikan (MyAnimeList): Naruto Shippuden ha un filler a pagina 2, la seconda parte e Naruto nessuno
+  // Jikan (MyAnimeList): ricerca, voci con le relazioni, episodi (Naruto Shippuden ha un filler a pagina 2,
+  // la seconda parte e Naruto nessuno)
   const jikan = async (route) => {
     const u = new URL(route.request().url());
-    const m = u.pathname.match(/^\/v4\/anime\/(\d+)\/episodes$/);
-    const n = Number(u.searchParams.get('page') || 1);
-    log.jikan.push(`${m && m[1]}:${n}`);
-    const mal = Number(m && m[1]);
-    const pages = mal === 101735 ? 3 : 1;
-    const data = Array.from({ length: n <= pages ? 100 : 0 }, (_, i) => {
-      const ep = (n - 1) * 100 + i + 1;
-      return { mal_id: ep, url: `https://myanimelist.net/anime/${mal}/Nome_Finto/episode/${ep}`, title: `Ep ${ep}`, filler: mal === 101735 && ep === 157, recap: false };
-    });
-    return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ pagination: { last_visible_page: pages, has_next_page: n < pages }, data }) });
-  };
-  const anilist = async (route) => {
-    log.al++;
-    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type,accept', 'access-control-allow-methods': 'POST' } });
-    if (alMode === '429') return route.fulfill({ status: 429, headers: { 'access-control-allow-origin': '*' }, contentType: 'application/json', body: '{"errors":[{"message":"Too Many Requests."}]}' });
-    const body = JSON.parse(route.request().postData());
-    log.alBody.push(body.variables);
-    let media = [];
-    if (body.variables.q != null) {
-      const q = body.variables.q.toLowerCase();
-      media = Object.keys(AL).filter((id) => AL[id].format === 'TV' && [AL[id].native, AL[id].english, AL[id].romaji].some((t) => t && (t.toLowerCase().includes(q) || q.includes(t.toLowerCase().slice(0, 6))))).map((id) => alMedia(id, false));
-    } else {
-      media = body.variables.ids.filter((id) => AL[id]).map((id) => alMedia(id, true));
+    const send = (body) => route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
+    if (malMode === '429') return route.fulfill({ status: 429, headers: { 'access-control-allow-origin': '*' }, contentType: 'application/json', body: '{"status":429,"type":"RateLimitException"}' });
+    let m;
+    if ((m = u.pathname.match(/^\/v4\/anime\/(\d+)\/episodes$/))) {
+      const n = Number(u.searchParams.get('page') || 1);
+      log.eps.push(`${m[1]}:${n}`);
+      const mal = Number(m[1]);
+      const pages = mal === 1735 ? 3 : 1;
+      const data = Array.from({ length: n <= pages ? 100 : 0 }, (_, i) => {
+        const ep = (n - 1) * 100 + i + 1;
+        return { mal_id: ep, url: `https://myanimelist.net/anime/${mal}/Nome_Finto/episode/${ep}`, title: `Ep ${ep}`, filler: mal === 1735 && ep === 157, recap: false };
+      });
+      return send({ pagination: { last_visible_page: pages, has_next_page: n < pages }, data });
     }
-    return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ data: { Page: { media } } }) });
+    log.mal.push(u.pathname + u.search);
+    if ((m = u.pathname.match(/^\/v4\/anime\/(\d+)\/full$/))) {
+      if (!MAL[m[1]]) return route.fulfill({ status: 404, headers: { 'access-control-allow-origin': '*' }, contentType: 'application/json', body: '{"status":404}' });
+      return send({ data: malAnime(m[1], true) });
+    }
+    if (u.pathname === '/v4/anime') {
+      const q = (u.searchParams.get('q') || '').toLowerCase();
+      const data = Object.keys(MAL).filter((id) => MAL[id].type === 'TV' && [MAL[id].ja, MAL[id].en, MAL[id].ro].some((t) => t && (t.toLowerCase().includes(q) || q.includes(t.toLowerCase().slice(0, 6))))).map((id) => malAnime(id, false));
+      return send({ pagination: { has_next_page: false }, data });
+    }
+    return route.fulfill({ status: 404, body: '{}' });
   };
 
   const ctx = await browser.newContext({ viewport: { width: 393, height: 852 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'it-IT' });
   await ctx.route('https://api.github.com/**', M.github);
   await ctx.route('https://api.themoviedb.org/**', tmdbExtra);
   await ctx.route('https://image.tmdb.org/**', M.image);
-  await ctx.route('https://graphql.anilist.co/**', anilist);
   await ctx.route('https://api.jikan.moe/**', jikan);
-  await ctx.route('https://s4.anilist.co/**', (route) => M.image({ request: () => ({ url: () => 'https://x/p_' + route.request().url().split('/').pop() }), fulfill: (o) => route.fulfill(o) }));
+  await ctx.route('https://cdn.myanimelist.net/**', (route) => M.image({ request: () => ({ url: () => 'https://x/p_' + route.request().url().split('/').pop() }), fulfill: (o) => route.fulfill(o) }));
   await ctx.route(/youtube(-nocookie)?\.com/, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<body style="background:#111;color:#eee;font:16px sans-serif;display:grid;place-items:center;height:100vh;margin:0">▶ video</body>' }));
   await ctx.addInitScript(() => { if (!localStorage.getItem('vds.ghToken')) { localStorage.setItem('vds.ghToken', 'x'); localStorage.setItem('vds.tmdbToken', 'y'); } });
   const page = await ctx.newPage();
@@ -245,8 +252,8 @@ const alMedia = (id, withRel) => {
   check('niente esce dallo schermo', await noOverflow());
   await shot('sg05-saghe');
 
-  // 5. anime: Naruto Shippuden → film e OVA da AniList
-  log.al = 0;
+  // 5. anime: Naruto Shippuden → film, OVA e spin-off da MyAnimeList
+  log.mal = [];
   await page.goto(base + '#/t/tv/31910');
   await page.waitForSelector('.d-fr .pc', { timeout: 20000 });
   const row = await texts('.d-fr .pc-title');
@@ -255,24 +262,25 @@ const alMedia = (id, withRel) => {
   check(`in ordine di uscita: ${labels.join(', ')}`, labels.join(',') === 'Film · 2007,Film · 2008,Film · 2009,Speciale · 2009,OVA · 2010,Spin-off · 2012,Film · 2014,Film · 2015,ONA · 2016');
   check('niente film di Naruto (altra serie) né del seguito Boruto', !row.some((t) => /Ninja Clash|Boruto Movie|Il film$/.test(t) && !/Shippuden/.test(t)) && !row.includes('Naruto: Il film'));
   check('niente musica, personaggi né la seconda parte (che è la serie stessa)', !row.some((t) => /One Piece|MV|Shippuuden 2/.test(t)) && !row.includes('Naruto Shippuden'));
-  check('spin-off (serie TV) con una carta sola anche se AniList ne ha due voci', row.filter((t) => /Rock Lee/.test(t)).length === 1);
+  check('spin-off (serie TV) con una carta sola anche se MyAnimeList ne ha due voci', row.filter((t) => /Rock Lee/.test(t)).length === 1);
   check(`titolo italiano di TMDB quando c'è: ${row[0]}`, row[0] === 'Naruto Shippuden: Il film');
   check(`conteggio: ${await text('.d-fr .fr-count')}`, (await text('.d-fr .fr-count')) === '1/9');
   check('il film in libreria mostra lo stato', (await page.$$('.d-fr .pc .tube')).length === 1);
   const hrefs = await page.$$eval('.d-fr .pc', (as) => as.map((a) => [a.getAttribute('href'), a.target]));
   check('film su TMDB aperti nell’app', hrefs[0][0] === '#/t/movie/880001' && !hrefs[0][1]);
   check('spin-off collegato alla serie TMDB', hrefs.some(([h, t]) => h === '#/t/tv/880020' && !t));
-  check('OVA che TMDB non ha → AniList, fuori dall’app', hrefs.some(([h, t]) => h === 'https://anilist.co/anime/7001' && t === '_blank'));
+  check('OVA che TMDB non ha → MyAnimeList, fuori dall’app', hrefs.some(([h, t]) => h === 'https://myanimelist.net/anime/7001/Nome' && t === '_blank'));
   check('niente film sbagliato (non animazione)', !hrefs.some(([h]) => h === '#/t/movie/880010'));
-  check(`AniList: ${log.al} richieste (≤ 8)`, log.al <= 8);
-  const asked = log.alBody.flatMap((v) => v.ids || []);
+  check(`MyAnimeList: ${log.mal.length} richieste (≤ 25)`, log.mal.length <= 25);
+  const asked = log.mal.map((x) => Number((x.match(/^\/v4\/anime\/(\d+)\/full$/) || [])[1])).filter(Boolean);
+  check('ogni voce scaricata una volta sola, niente manga', asked.length === new Set(asked).size && !asked.includes(5000));
   check('Naruto e Boruto non si allargano', !asked.includes(442) && !asked.includes(8888));
   check('niente esce dallo schermo', await noOverflow());
   // filler da MyAnimeList: la serie e la sua seconda parte, ci si ferma al primo filler (pagina 2)
   await page.waitForFunction(() => [...document.querySelectorAll('.facts dt')].some((d) => d.textContent.trim() === 'Filler'), null, { timeout: 10000 }).catch(() => {});
   check(`«Filler: ${await fact('Filler')}»`, (await fact('Filler')) === 'Sì');
-  check(`Jikan sfogliato fino al primo filler (${log.jikan.join(', ')})`, log.jikan.join(',') === '101735:1,101735:2');
-  check('il «Sì» apre la lista degli episodi di MyAnimeList fuori dall’app', await page.$$eval('.facts dd a', (as) => as.some((a) => a.href === 'https://myanimelist.net/anime/101735/Nome_Finto/episode' && a.target === '_blank')));
+  check(`episodi sfogliati fino al primo filler (${log.eps.join(', ')})`, log.eps.join(',') === '1735:1,1735:2');
+  check('il «Sì» apre la lista degli episodi di MyAnimeList fuori dall’app', await page.$$eval('.facts dd a', (as) => as.some((a) => a.href === 'https://myanimelist.net/anime/1735/Nome_Finto/episode' && a.target === '_blank')));
   await page.$eval('.facts', (e) => e.scrollIntoView({ block: 'center' }));
   await shot('sg06b-filler');
   await page.$eval('.d-fr', (e) => e.scrollIntoView({ block: 'center' }));
@@ -282,16 +290,15 @@ const alMedia = (id, withRel) => {
   check(`pagina «Tutti»: ${await text('.page-top h1')} · ${await text('.person-count')}`, (await text('.person-count')) === '1 visto su 9');
   await shot('sg07-anime-tutti');
 
-  // 6. riaprendo: dalla cache, niente AniList
-  log.al = 0;
+  // 6. riaprendo: dalla cache, niente MyAnimeList
+  log.mal = [];
   await page.reload();
   await page.waitForSelector('.person-grid .pc');
   await page.goto(base + '#/t/tv/31910');
   await page.waitForSelector('.d-fr .pc');
-  check(`seconda apertura senza AniList (${log.al} richieste)`, log.al === 0);
-  log.jikan = [];
+  log.eps = [];
   await page.waitForTimeout(800);
-  check(`seconda apertura senza Jikan (${log.jikan.length} richieste) e «Filler» ancora lì`, log.jikan.length === 0 && (await fact('Filler')) === 'Sì');
+  check(`seconda apertura senza MyAnimeList (${log.mal.length} + ${log.eps.length} richieste) e «Filler» ancora lì`, log.mal.length === 0 && log.eps.length === 0 && (await fact('Filler')) === 'Sì');
 
   // 7. trailer della serie: italiano, il più recente ufficiale
   await page.waitForSelector('.trailer-btn');
@@ -318,19 +325,22 @@ const alMedia = (id, withRel) => {
   check('serie completata: niente «Mancano»', (await fact('Mancano')) == null);
   await page.waitForSelector('.d-fr .pc', { timeout: 20000 }).catch(() => {});
   await page.waitForFunction(() => { try { return !!JSON.parse(localStorage.getItem('vds.filler') || '{}')['tv:46260']; } catch { return false; } }, null, { timeout: 10000 }).catch(() => {});
-  check(`Naruto senza filler su MyAnimeList: nessun dato (${log.jikan.join(', ')})`, (await fact('Filler')) == null && log.jikan.includes('100020:1'));
+  check(`Naruto senza filler su MyAnimeList: nessun dato (${log.eps.join(', ')})`, (await fact('Filler')) == null && log.eps.includes('20:1'));
 
-  // 9. AniList che chiede di aspettare: la riga non c'è, la pagina «Tutti» lo dice
-  alMode = '429';
-  await page.evaluate(() => { localStorage.removeItem('vds.al.fr'); });
+  // 9. MyAnimeList che chiede di aspettare: la riga non c'è, la pagina «Tutti» lo dice
+  malMode = '429';
+  // e cache di una versione precedente da togliere all'avvio
+  await page.evaluate(() => { localStorage.removeItem('vds.mal.fr'); localStorage.setItem('vds.al.fr', '{}'); localStorage.setItem('vds.al.map', '{}'); });
   await page.goto(base + '#/t/tv/73223');
   await page.reload();
   await page.waitForSelector('.facts');
   await page.waitForTimeout(1500);
-  check('AniList occupato: nessuna riga e nessun errore in pagina', (await page.$('.d-fr')) == null);
+  check('MyAnimeList occupato: nessuna riga e nessun errore in pagina', (await page.$('.d-fr')) == null);
   await page.goto(base + '#/extra/73223');
-  await page.waitForTimeout(800);
-  check(`pagina «Tutti» con AniList occupato: ${await text('.empty-title')}`, (await text('.empty-title')) === 'AniList chiede di aspettare un minuto');
+  await page.waitForSelector('.empty-title', { timeout: 8000 }).catch(() => {});
+  check(`pagina «Tutti» con MyAnimeList occupato: ${await text('.empty-title')}`, (await text('.empty-title')) === 'MyAnimeList chiede di aspettare un minuto');
+  // le cache di prima della versione 27 non restano sul telefono
+  check('vecchie cache tolte', await page.evaluate(() => localStorage.getItem('vds.al.fr') == null && localStorage.getItem('vds.al.map') == null));
 
   console.log('ERRORI:', errors.length ? errors.join('\n') : 'nessuno');
   await browser.close(); srv.kill();

@@ -1,9 +1,9 @@
-// Film, OVA, speciali e spin-off di un anime (da AniList, vedi js/anilist.js): una riga nella pagina della serie e
-// la pagina con tutti (#/extra/<idSerie>). Quelli collegati a TMDB si aprono nell'app e mostrano il tuo
-// stato; quelli che TMDB non ha aprono la pagina di AniList.
+// Film, OVA, speciali e spin-off di un anime (da MyAnimeList, vedi js/mal.js): una riga nella pagina della
+// serie e la pagina con tutti (#/extra/<idSerie>). Quelli collegati a TMDB si aprono nell'app e mostrano il
+// tuo stato; quelli che TMDB non ha aprono la pagina di MyAnimeList.
 import { html, icon, posterCard } from '../ui.js';
 import { item, metaOf } from '../store.js';
-import { fetchFranchise, cachedFranchise, saveFranchise, FORMAT_LABEL } from '../anilist.js';
+import { fetchFranchise, cachedFranchise, saveFranchise, FORMAT_LABEL } from '../mal.js';
 import { checkFiller } from '../filler.js';
 import { cardFor, emptyState, titleOf } from './common.js';
 
@@ -40,14 +40,14 @@ function card(x) {
     const [type] = x.key.split(':');
     return posterCard({ key: x.key, href: `#/t/${x.key.replace(':', '/')}`, title: x.tt || x.t, poster: x.tp || x.c, kind: { type, anime: true }, status: null, extra });
   }
-  return posterCard({ href: x.u, ext: true, title: x.t, poster: x.c, kind: { type: x.f === 'MOVIE' ? 'movie' : 'tv', anime: true }, status: null, extra });
+  return posterCard({ href: x.u, ext: true, title: x.t, poster: x.c, kind: { type: x.f === 'Movie' ? 'movie' : 'tv', anime: true }, status: null, extra });
 }
 
 // La riga nella pagina di un anime (serie). Niente finché non c'è niente da mostrare.
 export function franchiseSection(key, it, m, title, rerender) {
   repaint = rerender;
   const st = get(key, m, title);
-  // da AniList arrivano anche gli id MyAnimeList: servono a sapere se ci sono filler
+  // gli id MyAnimeList della serie servono anche a sapere se ci sono filler
   if (st.data?.mal?.length) checkFiller(key, st.data.mal, () => repaint());
   const items = st.data?.items || [];
   const id = key.split(':')[1];
@@ -73,7 +73,7 @@ export function renderFranchise(tvId, rerender) {
   if (!items.length) {
     if (st.loading) return html`${head}<p class="muted pad">Cerco film e OVA…</p>`;
     if (st.err) return html`${head}${emptyState(st.err)}`;
-    return html`${head}${emptyState(st.data?.none ? 'AniList non ha trovato questa serie' : 'Nessun film o OVA')}`;
+    return html`${head}${emptyState(st.data?.none ? 'MyAnimeList non ha trovato questa serie' : 'Nessun film o OVA')}`;
   }
   const n = items.filter(seen).length;
   return html`${head}

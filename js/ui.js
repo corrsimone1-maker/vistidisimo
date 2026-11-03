@@ -47,7 +47,7 @@ export const icon = {
 };
 
 export const IMG = 'https://image.tmdb.org/t/p/';
-// percorso TMDB ("/abc.jpg") oppure indirizzo intero (copertine di AniList)
+// percorso TMDB ("/abc.jpg") oppure indirizzo intero (copertine di MyAnimeList)
 export const img = (path, size = 'w342') => (path ? (/^https:\/\//.test(path) ? path : IMG + size + path) : '');
 
 export const STATUS = {

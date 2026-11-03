@@ -252,7 +252,7 @@ export async function fetchTrailer(type, id) {
   return null;
 }
 
-// ---- ricerca per collegare titoli presi da altrove (AniList) ----
+// ---- ricerca per collegare titoli presi da altrove (MyAnimeList) ----
 export async function searchTmdb(type, query, language = 'it-IT') {
   const d = await tm(`/search/${type}`, { query, language, include_adult: 'false' });
   return d?.results || [];
