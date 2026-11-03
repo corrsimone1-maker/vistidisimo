@@ -1,7 +1,7 @@
 import { html, raw, icon, img, today, fmtDayLong, daysBetween, toast, fmtClock } from '../ui.js';
 import { lib, metaOf, item, dispatch, LS } from '../store.js';
 import * as A from '../actions.js';
-import { nextEpisode, isAnime, airedCount, byLast } from '../derive.js';
+import { nextEpisode, airedCount, byLast } from '../derive.js';
 import { fetchSeason } from '../tmdb.js';
 import { titleOf, emptyState, metaBanner } from './common.js';
 
@@ -127,7 +127,7 @@ function nextRow(key, it, m, ne, startLabel) {
   // lasciato a metà proprio questo episodio: al posto di «Poi ne restano…» il minuto
   const here = it.pause && it.pause.s === ne.s && it.pause.e === ne.e;
   return html`<div class="ep-card${an.cls}" data-sec="${sec}" ${an.style ? raw(`style="${an.style}"`) : ''}>
-    <a class="ep-still" href="#/t/tv/${id}">${still ? html`<img loading="lazy" src="${still}" alt="">` : ''}<span class="kind-dot ${isAnime(it, m) ? 'is-anime' : ''}"></span>${it.pause ? html`<span class="pc-pause"></span>` : ''}</a>
+    <a class="ep-still" href="#/t/tv/${id}">${still ? html`<img loading="lazy" src="${still}" alt="">` : ''}${it.pause ? html`<span class="pc-pause"></span>` : ''}</a>
     <a class="ep-body" href="#/t/tv/${id}">
       <span class="ep-show">${titleOf(key, it, m)}</span>
       <span class="ep-code">S${ne.s} · E${ne.e}${ep?.name ? html` <em>${ep.name}</em>` : ''}</span>

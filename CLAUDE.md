@@ -18,7 +18,8 @@ HTML/CSS/JS statici, moduli ES senza build né dipendenze. Niente framework.
 | `js/store.js` | stato, coda delle operazioni, sincronizzazione con GitHub, cache TMDB (`meta.json`), correzione numerazione episodi |
 | `js/github.js` | API Contents di GitHub (`ghGet`/`ghPut`), `serialize` (una voce per riga). **`OWNER` e `DATA_REPO` sono scritti qui** |
 | `js/tmdb.js` | API TMDB (lingua `it-IT`), `metaFromDetails`, `fetchSeason`, `fetchCollection` (saghe), `fetchTrailer`, `searchTmdb`, `pool` (max 6 richieste insieme) |
-| `js/anilist.js` | AniList (GraphQL pubblico, senza chiave): film, OVA e speciali di un anime e il loro collegamento a TMDB |
+| `js/anilist.js` | AniList (GraphQL pubblico, senza chiave): film, OVA, speciali e spin-off di un anime e il loro collegamento a TMDB |
+| `js/filler.js` | Jikan (MyAnimeList, pubblico, senza chiave): se un anime ha episodi filler, solo sì/no |
 | `js/derive.js` | avanzamento, stato automatico, prossimo episodio, anime, statistiche, % liste |
 | `js/actions.js` | azioni utente → operazioni |
 | `js/export.js` | esportazione per altre app: CSV di Letterboxd (film) e di Simkl (tutto) |
@@ -65,7 +66,7 @@ Chiave `tipo:idTMDB` (`tv:48866`, `movie:129`). Stati: `planned` da guardare, `w
 
 **Saghe** (2/11/2026, chieste da Simo): le collezioni di TMDB.
 - `meta.json` ha per ogni film `co: [idCollezione, nome]`, oppure `0` se non ha saga. I film scaricati prima (senza `co`) si riscaricano **una volta** (`needsRefresh` in `store.js`); in `meta.json` possono restare titoli tolti dalla libreria che non si aggiornano più: non contano.
-- Nella pagina del film, fatto **«Saga»** (nome senza «- Collezione», `sagaName`) → `#/saga/<id>`: tutti i film della saga **in ordine di uscita** (quelli senza data in fondo), con anno sotto, stato per quelli in libreria, «N visti su M» dove M conta solo i film **già usciti** («· 1 in uscita»).
+- Nella pagina del film **riga della saga come «Film e OVA» degli anime** (scelta di Simo, 3/11/2026: il dato «Saga» nella tabella non gli piaceva): nome della saga (senza «- Collezione», `sagaName`; se è lungo si taglia con i puntini) con «visti/usciti», i film in ordine di uscita che scorrono in orizzontale (compreso quello aperto) e «Tutti N» → `#/saga/<id>` (`sagaSection` in `saga.js`). La pagina della saga: tutti i film **in ordine di uscita** (quelli senza data in fondo), con anno sotto, stato per quelli in libreria, «N visti su M» dove M conta solo i film **già usciti** («· 1 in uscita»).
 - **Elenco delle saghe**: menu ≡ della Libreria → «Saghe» → `#/saghe` (la scheda accesa resta Libreria): le saghe dei film in libreria come le carte delle liste (mosaico, «2 di 3», percentuale e barra rosa); prima quelle a metà, poi le finite, poi quelle mai iniziate, dentro dall'ultima vista.
 - Le collezioni si tengono sul telefono 7 giorni (`vds.sagas`), 4 richieste per volta.
 
@@ -73,9 +74,18 @@ Chiave `tipo:idTMDB` (`tv:48866`, `movie:129`). Stati: `planned` da guardare, `w
 - si cerca la serie su AniList col titolo originale (poi italiano) e l'anno della prima puntata (±1);
 - si seguono le relazioni `SEQUEL`, `PREQUEL`, `PARENT`, `SIDE_STORY` (e si mostrano senza seguirle `SPIN_OFF`, `SUMMARY`, `COMPILATION`, `ALTERNATIVE`); le **serie TV** collegate si allargano solo se su TMDB sono **questa stessa serie** (una stagione divisa su AniList): così da Naruto Shippuden non si entra in Naruto o Boruto, ma i film legati direttamente (anche The Last → Boruto: il film) restano;
 - si mostrano film, OVA, ONA, speciali e corti (`SHOW`), in ordine di uscita, con «Film · 2009», «OVA · 2010»…;
+- **spin-off** (chiesti da Simo il 3/11/2026, es. Magia Record in Madoka Magica): si mostrano anche le **serie TV** arrivate con `SPIN_OFF` o `SIDE_STORY` (`SPIN_TV`), con «Spin-off · 2020», collegate alla serie TMDB; non se su TMDB sono questa stessa serie. Se più voci AniList finiscono sullo stesso titolo TMDB (le stagioni di uno spin-off) resta una carta sola, la prima uscita. [Non verificato sull'AniList vero quale delle due relazioni usi Magia Record: per questo valgono tutte e due.] La cache `vds.al.fr` ha la versione `v` (`FR_VER`): una copia vecchia si mostra e intanto si riscarica;
 - ognuno si collega a TMDB cercando il titolo giapponese, inglese o romaji: solo animazione, titolo simile (Dice sulle coppie di lettere ≥ 0,6) e anno ±1. Se c'è si apre nell'app col titolo italiano e il tuo stato; se no (molti OVA su TMDB stanno negli speciali della serie) la carta mostra la copertina di AniList e apre **anilist.co fuori dall'app**;
 - AniList permette circa 30 richieste al minuto (oggi è «degradato»): l'elenco di ogni serie resta sul telefono 7 giorni (`vds.al.fr`, ultime 60 serie), i collegamenti a TMDB 120 giorni (non trovati 14) in `vds.al.map`. Con un errore (anche 429) la riga semplicemente non c'è e «Tutti» dice cosa è successo; non si riprova fino alla prossima apertura dell'app.
 - `img()` in `ui.js` accetta anche un indirizzo intero (copertine di AniList); `posterCard` con `ext: true` apre il link fuori dall'app (`target=_blank`).
+
+**Filler** (3/11/2026): Simo **non** vuole episodi segnati come filler né saltati in Prossimi (non si fida: la numerazione di TMDB e degli altri siti spesso non coincide). Vuole solo sapere **se** un anime ne ha, e poi li guarda da sé. Nella pagina di una serie anime, dato **«Filler: Sì»** solo se MyAnimeList ne segna almeno uno; il «Sì» apre la lista degli episodi su MyAnimeList fuori dall'app. Se non ce ne sono (o non si sa) non compare niente. Codice in `js/filler.js`:
+- gli id MyAnimeList (`idMal`) arrivano da AniList insieme a «Film e OVA» (`mal` in `fetchFranchise`: la serie e le parti AniList che su TMDB sono la stessa serie); il controllo parte da `franchiseSection`;
+- **Jikan** (`api.jikan.moe/v4/anime/{id}/episodes?page=N`, pubblica, senza chiave, CORS; 3 richieste al secondo e 60 al minuto): pagine da 100 episodi, ci si ferma al primo `filler: true` (massimo 15 pagine per parte, 450 ms tra una e l'altra);
+- sul telefono in `vds.filler` (sì per 90 giorni, no per 30); se Jikan non risponde non si salva niente e si riprova alla prossima apertura dell'app.
+- Scartato (2/11/2026): leggere animefillerlist.com con un'automazione mensile.
+
+**Prossimi senza pallino anime** (3/11/2026): sulle miniature di «Da vedere» non c'è nessun segno per gli anime (Simo non l'aveva chiesto e non lo vuole); resta solo il pallino rosso di «dove mi sono fermato».
 
 **Mancano** (2/11/2026): nella pagina di una serie **in corso o da guardare**, fatto «Mancano: 4 episodi · 1 h 36 min» = episodi usciti e non visti (`unwatchedAired`) × durata media (`episode_run_time`, `rt`, se no 24 per gli anime e 42 per le altre); oltre le 3 ore si arrotonda ai 10 minuti.
 
@@ -146,8 +156,8 @@ node prova-export.js /percorso/screenshot                # export Letterboxd e S
 node prova-prossimi.js /percorso/screenshot              # animazione del cerchio in Da vedere (fotogrammi pr-*.png), Annulla, scheda che si chiude, Da iniziare, movimento ridotto
 node prova-sospesi.js /percorso/screenshot               # menu ≡ e «dove mi sono fermato»: minutaggio, serie/film/anime assoluto, pallini, «Fermo a», pulizia automatica, reset, ricarica
 node prova-sicurezza.js /percorso/screenshot             # modulo dei token per Password di Apple, Invio senza ricaricare, niente commit inutile di config.json, ripiego w780→original, nessun gestore inline
-node prova-saghe.js /percorso/screenshot                 # saghe (co in meta.json, pagina, elenco dal menu ≡), film e OVA di Naruto Shippuden da un AniList finto (senza allargarsi a Naruto e Boruto, cache, 429), «Mancano», trailer
+node prova-saghe.js /percorso/screenshot                 # saghe (co in meta.json, riga nella pagina del film, pagina, elenco dal menu ≡), film, OVA e spin-off di Naruto Shippuden da un AniList finto (senza allargarsi a Naruto e Boruto, spin-off doppio → una carta, cache, 429), filler da un Jikan finto, «Mancano», trailer
 node prova-stagioni.js /percorso/screenshot              # finestra «Nuova stagione»: casi limite di newSeason, più serie / una sola, Ok, Apri, tocco fuori, announced su GitHub (mai abbassato), altro dispositivo, attesa con un foglio aperto
 ```
-`prova-sospesi.js` è scritta sui dati veri di fine ottobre 2026 (The 100 in corso a S2E5, un solo titolo con «naru»): con i dati del 2/11/2026 (The 100 completata, tre Naruto) 9 verifiche falliscono anche senza nessuna modifica all'app. Va riscritta con dati fissi prima di fidarsene.
+`prova-sospesi.js` è scritta sui dati veri di fine ottobre 2026 (The 100 in corso a S2E5, un solo titolo con «naru»): con i dati del 2/11/2026 (The 100 completata, tre Naruto) 9 verifiche falliscono anche senza nessuna modifica all'app. Va riscritta con dati fissi prima di fidarsene. Lo stesso per `prova-prossimi.js`: con i dati del 3/11/2026 falliscono «doppio tocco» e «movimento ridotto» anche senza modifiche all'app (verificato sulla versione 25).
 Playwright è installato globalmente: lancia le prove con `NODE_PATH=$(npm root -g) node …`. Se una prova si interrompe può lasciare acceso il suo `python3 -m http.server`: spegnilo (`pkill -f "[h]ttp\.server 81"`) prima di rilanciare, se no la prova successiva sulla stessa porta usa il server vecchio. Le due repo devono stare una accanto all'altra (le prove leggono `../vistidisimo-dati/library.json` senza modificarlo). `mock.js` simula l'API Contents di GitHub (con sha e 409), TMDB (dettagli, stagioni, ricerca, tendenze) e le immagini. Viewport 393×852 come l'iPhone di Simo; guarda sempre gli screenshot.

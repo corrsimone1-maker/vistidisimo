@@ -357,7 +357,6 @@ svg { width: 22px; height: 22px; flex: none; }
 .ep-card.anim-appear { animation: epAppear .42s cubic-bezier(.2, .8, .2, 1) var(--ad, 0ms) both; }
 .ep-still { position: relative; aspect-ratio: 16 / 9; border-radius: 9px; overflow: hidden; background: var(--velluto-2); }
 .ep-still img { width: 100%; height: 100%; object-fit: cover; }
-.kind-dot.is-anime { position: absolute; top: 5px; left: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--rosa); box-shadow: 0 0 6px var(--rosa); }
 .ep-body { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
 .ep-show { font: 650 13.5px/1.25 var(--f-disp); letter-spacing: -.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ep-code { font-size: 13px; font-weight: 700; color: var(--testo-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -635,6 +634,11 @@ body:has(#sheet-root .sheet-wrap.in) #toast-root { bottom: auto; top: calc(var(-
 /* ---------- film e OVA degli anime, trailer ---------- */
 .d-fr { margin: 26px 0 0; }
 .fr-count { margin-left: 5px; color: var(--testo-3); font: 600 13px var(--f-disp); }
+.d-saga .row-head { gap: 12px; }
+.d-saga .row-all { flex: none; white-space: nowrap; }
+.sg-h { display: flex; align-items: baseline; min-width: 0; }
+.sg-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sg-h .fr-count { flex: none; }
 .trailer-btn {
   display: inline-flex; align-items: center; gap: 6px; height: 30px; margin-top: 10px; padding: 0 12px 0 10px; border-radius: 9px;
   background: rgba(255, 95, 210, .12); color: var(--rosa); font-weight: 800; font-size: 13px;

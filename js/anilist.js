@@ -1,4 +1,4 @@
-// Film, OVA e speciali di un anime, da AniList (API pubblica, gratuita, senza chiave).
+// Film, OVA, speciali e spin-off di un anime, da AniList (API pubblica, gratuita, senza chiave).
 //
 // TMDB non collega una serie anime ai suoi film e OVA; AniList sì, con le «relazioni» (seguito, prequel,
 // storia parallela…). Qui si trova l'anime su AniList, si seguono le relazioni e ogni film/OVA trovato si
@@ -14,6 +14,7 @@ import { LS } from './store.js';
 const API = 'https://graphql.anilist.co';
 const DAY = 24 * 3600 * 1000;
 const FR_TTL = 7 * DAY; // elenco dei film e OVA di una serie
+const FR_VER = 2; // 2: anche gli spin-off in forma di serie TV e gli id MyAnimeList (per i filler)
 const HIT_TTL = 120 * DAY; // collegamento a TMDB trovato
 const MISS_TTL = 14 * DAY; // non trovato: si riprova dopo un po'
 
@@ -22,8 +23,11 @@ const FOLLOW = new Set(['SEQUEL', 'PREQUEL', 'PARENT', 'SIDE_STORY']);
 const LEAF = new Set(['SPIN_OFF', 'SUMMARY', 'COMPILATION', 'ALTERNATIVE']);
 // formati che si mostrano (le serie TV della stessa saga sono le stagioni della serie stessa)
 export const SHOW = new Set(['MOVIE', 'OVA', 'ONA', 'SPECIAL', 'TV_SHORT']);
+// le serie TV si mostrano solo se sono uno spin-off (o una storia parallela) che su TMDB è un'altra
+// serie: Magia Record in Madoka Magica (chiesto da Simo, 3/11/2026)
+const SPIN_TV = new Set(['SPIN_OFF', 'SIDE_STORY']);
 const SERIESLIKE = new Set(['TV', 'TV_SHORT', 'ONA']);
-export const FORMAT_LABEL = { MOVIE: 'Film', OVA: 'OVA', ONA: 'ONA', SPECIAL: 'Speciale', TV_SHORT: 'Corti' };
+export const FORMAT_LABEL = { MOVIE: 'Film', OVA: 'OVA', ONA: 'ONA', SPECIAL: 'Speciale', TV_SHORT: 'Corti', TV: 'Spin-off' };
 const MAX_NODES = 160;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -51,7 +55,7 @@ async function gql(query, variables) {
   throw new AniListError('AniList non risponde');
 }
 
-const FIELDS = 'id type format isAdult startDate { year month day } title { romaji english native } coverImage { large } siteUrl';
+const FIELDS = 'id idMal type format isAdult startDate { year month day } title { romaji english native } coverImage { large } siteUrl';
 const Q_SEARCH = `query ($q: String) { Page(perPage: 10) { media(search: $q, type: ANIME) { ${FIELDS} } } }`;
 const Q_NODES = `query ($ids: [Int]) { Page(perPage: 50) { media(id_in: $ids, type: ANIME) { ${FIELDS} relations { edges { relationType(version: 2) node { id type format isAdult } } } } } }`;
 
@@ -136,16 +140,18 @@ async function findStart(m, fallbackTitle) {
   return null;
 }
 
-// Tutti i film/OVA/speciali collegati alla serie TMDB `key` (es. «tv:31910»), in ordine di uscita.
-// Risultato: { at, items: [{ al, f, d, t, c, u, rel, key, tt, tp }] } — al id AniList, f formato,
-// d data, t titolo (inglese o romaji), c copertina AniList, u pagina AniList, key/tt/tp titolo TMDB se trovato.
+// Tutti i film/OVA/speciali (e gli spin-off) collegati alla serie TMDB `key` (es. «tv:31910»), in ordine
+// di uscita. Risultato: { v, at, start, mal, items: [{ al, f, d, t, c, u, rel, key, tt, tp }] } — al id
+// AniList, f formato, d data, t titolo (inglese o romaji), c copertina AniList, u pagina AniList,
+// key/tt/tp titolo TMDB se trovato; mal = id MyAnimeList delle parti AniList che sono questa serie.
 export async function fetchFranchise(key, m, fallbackTitle) {
   const tvId = Number(key.split(':')[1]);
   const start = await findStart(m, fallbackTitle);
-  if (!start) return { at: Date.now(), items: [], none: true };
+  if (!start) return { v: FR_VER, at: Date.now(), items: [], none: true };
   const nodes = new Map([[start.id, { ...start, rel: 'START' }]]);
   const fetched = new Set();
   const show = new Map(); // id -> relazione con cui è arrivato
+  const same = new Set([start.id]); // parti AniList che su TMDB sono questa stessa serie
   // A ogni giro si scaricano (con le loro relazioni) gli elementi raggiunti da una relazione «di
   // famiglia». Si allargano il punto di partenza, i film/OVA/speciali e le serie TV che su TMDB sono
   // questa stessa serie (una stagione divisa su AniList); le altre serie TV (prequel, seguito) no.
@@ -166,6 +172,7 @@ export async function fetchFranchise(key, m, fallbackTitle) {
       if (x.id !== start.id && x.format === 'TV') {
         const t = await mapToTmdb(x, { anyYear: true });
         if (t?.key !== `tv:${tvId}`) continue;
+        same.add(x.id);
       }
       for (const e of x.relations?.edges || []) {
         const n = e.node;
@@ -173,7 +180,8 @@ export async function fetchFranchise(key, m, fallbackTitle) {
         const follow = FOLLOW.has(e.relationType); const leaf = LEAF.has(e.relationType);
         if (!follow && !leaf) continue;
         if (!nodes.has(n.id)) nodes.set(n.id, { ...n, rel: e.relationType });
-        if (SHOW.has(n.format) && !show.has(n.id) && n.id !== start.id) show.set(n.id, e.relationType);
+        const shown = SHOW.has(n.format) || (n.format === 'TV' && SPIN_TV.has(e.relationType));
+        if (shown && !show.has(n.id) && n.id !== start.id) show.set(n.id, e.relationType);
         if (follow && !fetched.has(n.id) && !next.includes(n.id) && nodes.size < MAX_NODES) next.push(n.id);
       }
     }
@@ -185,29 +193,40 @@ export async function fetchFranchise(key, m, fallbackTitle) {
     const d = await gql(Q_NODES, { ids: missing.slice(i, i + 50) });
     for (const x of d?.Page?.media || []) nodes.set(x.id, { ...nodes.get(x.id), ...x });
   }
-  const list = [...show.keys()].map((id) => nodes.get(id)).filter((n) => n?.title && n.id !== start.id);
+  const list = [...show.keys()].map((id) => nodes.get(id)).filter((n) => n?.title && !same.has(n.id));
   const items = list.map((n) => ({
     al: n.id, f: n.format, d: ymd(n.startDate), t: n.title.english || n.title.romaji || n.title.native || '',
     c: n.coverImage?.large || null, u: n.siteUrl || `https://anilist.co/anime/${n.id}`, rel: show.get(n.id),
   }));
   // collegamento a TMDB, 4 alla volta
+  const drop = new Set();
   let i = 0;
   const work = async () => {
     while (i < list.length) {
       const idx = i++;
-      try { const t = await mapToTmdb(list[idx]); if (t && t.key !== `tv:${tvId}`) Object.assign(items[idx], { key: t.key, tt: t.t, tp: t.p }); } catch { /* resta senza */ }
+      try {
+        const t = await mapToTmdb(list[idx]);
+        if (t && t.key !== `tv:${tvId}`) Object.assign(items[idx], { key: t.key, tt: t.t, tp: t.p });
+        else if (t && list[idx].format === 'TV') drop.add(idx); // è questa serie, non uno spin-off
+      } catch { /* resta senza */ }
     }
   };
   await Promise.all([work(), work(), work(), work()]);
-  items.sort((a, b) => (a.d || '9999').localeCompare(b.d || '9999') || a.t.localeCompare(b.t));
-  return { at: Date.now(), start: start.id, items };
+  const keys = new Set();
+  const out = items.filter((_, idx) => !drop.has(idx))
+    .sort((a, b) => (a.d || '9999').localeCompare(b.d || '9999') || a.t.localeCompare(b.t))
+    // lo stesso titolo TMDB da più voci AniList (es. le stagioni di uno spin-off): una carta sola
+    .filter((x) => !x.key || (keys.has(x.key) ? false : keys.add(x.key)));
+  const mal = [...new Set([...same].map((id) => nodes.get(id)?.idMal).filter(Boolean))];
+  return { v: FR_VER, at: Date.now(), start: start.id, mal, items: out };
 }
 
 // ---- cache per serie ----
 export function cachedFranchise(key) {
   const all = LS.get('vds.al.fr', {}) || {};
   const v = all[key];
-  return v ? { ...v, stale: Date.now() - (v.at || 0) > FR_TTL } : null;
+  // una copia di una versione precedente si mostra, ma si riscarica subito
+  return v ? { ...v, stale: v.v !== FR_VER || Date.now() - (v.at || 0) > FR_TTL } : null;
 }
 export function saveFranchise(key, v) {
   const all = LS.get('vds.al.fr', {}) || {};

@@ -1,9 +1,12 @@
 // Prova di saghe, film e OVA degli anime, «Mancano» e trailer, con i dati veri della libreria e TMDB/AniList finti:
-// - saghe: campo `co` in meta.json (film riscaricati una volta), «Saga» nella pagina del film, pagina della saga
-//   (ordine di uscita, visti su usciti, in uscita), elenco «Saghe» dal menu ≡ (prima quelle a metà);
-// - anime: Naruto Shippuden → film e OVA da AniList, senza allargarsi a Naruto e Boruto (altre serie TMDB),
-//   collegati a TMDB quando c'è (stato dalla libreria), link ad AniList quando no, seconda apertura dalla cache,
-//   AniList che chiede di aspettare;
+// - saghe: campo `co` in meta.json (film riscaricati una volta), riga della saga nella pagina del film (come
+//   «Film e OVA»), pagina della saga (ordine di uscita, visti su usciti, in uscita), elenco «Saghe» dal menu ≡
+//   (prima quelle a metà);
+// - anime: Naruto Shippuden → film, OVA e spin-off da AniList, senza allargarsi a Naruto e Boruto (altre serie
+//   TMDB), collegati a TMDB quando c'è (stato dalla libreria), link ad AniList quando no, uno spin-off con due
+//   voci AniList → una carta, una storia parallela che è la serie stessa → niente carta, seconda apertura dalla
+//   cache, AniList che chiede di aspettare;
+// - filler: «Filler: Sì» da MyAnimeList (Jikan finto) solo se ce ne sono, con il link alla lista degli episodi;
 // - «Mancano N episodi · tempo» per una serie in corso; tasto Trailer (italiano, poi inglese) con il video in un foglio.
 const { chromium } = require('playwright');
 const { spawn } = require('child_process');
@@ -35,12 +38,15 @@ const TM = [
   ['movie', 880008, 'Boruto: Naruto the Movie', 'BORUTO -NARUTO THE MOVIE-', '2015-08-07'],
   ['movie', 880009, 'Naruto: Il film', '劇場版 NARUTO 大活劇! 雪姫忍法帖だってばよ!!', '2004-08-21'],
   ['movie', 880010, 'Un film qualunque', 'NARUTO ナルト', '2007-08-04', [18]], // non animazione: da scartare
+  ['tv', 880020, 'Naruto SD: Rock Lee', 'NARUTO SD ロック・リーの青春フルパワー忍伝', '2012-04-03'], // spin-off
 ];
 
 // AniList finto: id → { format, y, native, english, romaji, rel: [[tipo, id]] }
 const AL = {
-  1735: { format: 'TV', y: 2007, native: 'NARUTO -ナルト- 疾風伝', english: 'Naruto Shippuden', romaji: 'Naruto: Shippuuden', rel: [['PREQUEL', 20], ['SEQUEL', 97938], ['SIDE_STORY', 2472], ['SIDE_STORY', 4437], ['SIDE_STORY', 6325], ['SIDE_STORY', 13667], ['SIDE_STORY', 7001], ['SPIN_OFF', 12979], ['CHARACTER', 21], ['OTHER', 999], ['SUMMARY', 7002], ['ADAPTATION', 5000]] },
-  20: { format: 'TV', y: 2002, native: 'NARUTO -ナルト-', english: 'Naruto', romaji: 'Naruto', rel: [['SEQUEL', 1735], ['SIDE_STORY', 442]] },
+  1735: { format: 'TV', y: 2007, native: 'NARUTO -ナルト- 疾風伝', english: 'Naruto Shippuden', romaji: 'Naruto: Shippuuden', mal: 1735, rel: [['PREQUEL', 20], ['SEQUEL', 97938], ['SIDE_STORY', 1736], ['SPIN_OFF', 12980], ['SIDE_STORY', 2472], ['SIDE_STORY', 4437], ['SIDE_STORY', 6325], ['SIDE_STORY', 13667], ['SIDE_STORY', 7001], ['SPIN_OFF', 12979], ['CHARACTER', 21], ['OTHER', 999], ['SUMMARY', 7002], ['ADAPTATION', 5000]] },
+  // una seconda parte che AniList tiene a sé ma su TMDB è la stessa serie: si allarga e non si mostra
+  1736: { format: 'TV', y: 2010, native: 'NARUTO -ナルト- 疾風伝', english: 'Naruto Shippuden', romaji: 'Naruto: Shippuuden 2', mal: 1736, rel: [['PREQUEL', 1735]] },
+  20: { format: 'TV', y: 2002, native: 'NARUTO -ナルト-', english: 'Naruto', romaji: 'Naruto', mal: 20, rel: [['SEQUEL', 1735], ['SIDE_STORY', 442]] },
   97938: { format: 'TV', y: 2017, native: 'BORUTO-ボルト- NARUTO NEXT GENERATIONS', english: 'Boruto: Naruto Next Generations', romaji: 'Boruto: Naruto Next Generations', rel: [['PREQUEL', 1735], ['SIDE_STORY', 8888]] },
   2472: { format: 'MOVIE', y: 2007, native: '劇場版 NARUTO -ナルト- 疾風伝', english: 'Naruto Shippuden the Movie', romaji: 'Naruto: Shippuuden Movie 1', rel: [['PARENT', 1735], ['SEQUEL', 4437]] },
   4437: { format: 'MOVIE', y: 2008, native: '劇場版 NARUTO -ナルト- 疾風伝 絆', english: 'Naruto Shippuden the Movie: Bonds', romaji: 'Naruto: Shippuuden Movie 2 - Kizuna', rel: [['PARENT', 1735], ['PREQUEL', 2472], ['SEQUEL', 6325]] },
@@ -51,6 +57,7 @@ const AL = {
   7002: { format: 'SPECIAL', y: 2009, native: 'NARUTO 疾風伝 総集編', english: null, romaji: 'Naruto Shippuuden: Recap', rel: [] },
   7003: { format: 'ONA', y: 2016, native: 'BORUTO ミニ', english: null, romaji: 'Boruto Mini', rel: [] },
   12979: { format: 'TV', y: 2012, native: 'NARUTO SD ロック・リーの青春フルパワー忍伝', english: 'Naruto Spin-Off: Rock Lee', romaji: 'Naruto SD', rel: [] },
+  12980: { format: 'TV', y: 2013, native: 'NARUTO SD ロック・リーの青春フルパワー忍伝 2', english: 'Naruto Spin-Off: Rock Lee 2', romaji: 'Naruto SD 2', rel: [] },
   442: { format: 'MOVIE', y: 2004, native: '劇場版 NARUTO 大活劇! 雪姫忍法帖だってばよ!!', english: 'Naruto the Movie: Ninja Clash', romaji: 'Naruto Movie 1', rel: [] },
   8888: { format: 'MOVIE', y: 2023, native: 'BORUTO 劇場版', english: 'Boruto Movie', romaji: 'Boruto Movie', rel: [] },
   21: { format: 'TV', y: 1999, native: 'ONE PIECE', english: 'One Piece', romaji: 'One Piece', rel: [] },
@@ -58,7 +65,7 @@ const AL = {
 };
 const alMedia = (id, withRel) => {
   const a = AL[id];
-  const m = { id: Number(id), type: 'ANIME', format: a.format, isAdult: false, startDate: { year: a.y, month: 8, day: 1 }, title: { romaji: a.romaji, english: a.english, native: a.native }, coverImage: { large: `https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/c_${id}.jpg` }, siteUrl: `https://anilist.co/anime/${id}` };
+  const m = { id: Number(id), idMal: a.mal ? 100000 + a.mal : null, type: 'ANIME', format: a.format, isAdult: false, startDate: { year: a.y, month: 8, day: 1 }, title: { romaji: a.romaji, english: a.english, native: a.native }, coverImage: { large: `https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/c_${id}.jpg` }, siteUrl: `https://anilist.co/anime/${id}` };
   if (withRel) m.relations = { edges: a.rel.filter(([, t]) => AL[t] || t === 5000).map(([r, t]) => ({ relationType: r, node: t === 5000 ? { id: 5000, type: 'MANGA', format: 'MANGA', isAdult: false } : { id: t, type: 'ANIME', format: AL[t].format, isAdult: false } })) };
   return m;
 };
@@ -75,7 +82,7 @@ const alMedia = (id, withRel) => {
   M.files['meta.json'] = fs.readFileSync(path.join(DATA, 'meta.json'), 'utf8'); M.shas['meta.json'] = 'meta0';
   // un film di Naruto in libreria (visto), per vedere lo stato nella riga «Film e OVA»
   { const d = JSON.parse(M.files['library.json']); d.items['movie:880003'] = { type: 'movie', id: 880003, title: 'Naruto Shippuden: Eredi della volontà del fuoco', year: 2009, status: 'completed', rating: null, added: '2020-01-01T10:00:00Z', last: '2020-01-02T10:00:00Z', fav: null, rewatch: 0, seen: '2020-01-02' }; M.files['library.json'] = JSON.stringify(d); }
-  const log = { al: 0, alBody: [], videos: [], search: 0 };
+  const log = { al: 0, alBody: [], videos: [], search: 0, jikan: [] };
   let alMode = 'ok';
 
   const tmdbExtra = async (route) => {
@@ -113,6 +120,20 @@ const alMedia = (id, withRel) => {
     }
     return M.tmdb(route);
   };
+  // Jikan (MyAnimeList): Naruto Shippuden ha un filler a pagina 2, la seconda parte e Naruto nessuno
+  const jikan = async (route) => {
+    const u = new URL(route.request().url());
+    const m = u.pathname.match(/^\/v4\/anime\/(\d+)\/episodes$/);
+    const n = Number(u.searchParams.get('page') || 1);
+    log.jikan.push(`${m && m[1]}:${n}`);
+    const mal = Number(m && m[1]);
+    const pages = mal === 101735 ? 3 : 1;
+    const data = Array.from({ length: n <= pages ? 100 : 0 }, (_, i) => {
+      const ep = (n - 1) * 100 + i + 1;
+      return { mal_id: ep, url: `https://myanimelist.net/anime/${mal}/Nome_Finto/episode/${ep}`, title: `Ep ${ep}`, filler: mal === 101735 && ep === 157, recap: false };
+    });
+    return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ pagination: { last_visible_page: pages, has_next_page: n < pages }, data }) });
+  };
   const anilist = async (route) => {
     log.al++;
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': 'content-type,accept', 'access-control-allow-methods': 'POST' } });
@@ -134,6 +155,7 @@ const alMedia = (id, withRel) => {
   await ctx.route('https://api.themoviedb.org/**', tmdbExtra);
   await ctx.route('https://image.tmdb.org/**', M.image);
   await ctx.route('https://graphql.anilist.co/**', anilist);
+  await ctx.route('https://api.jikan.moe/**', jikan);
   await ctx.route('https://s4.anilist.co/**', (route) => M.image({ request: () => ({ url: () => 'https://x/p_' + route.request().url().split('/').pop() }), fulfill: (o) => route.fulfill(o) }));
   await ctx.route(/youtube(-nocookie)?\.com/, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<body style="background:#111;color:#eee;font:16px sans-serif;display:grid;place-items:center;height:100vh;margin:0">▶ video</body>' }));
   await ctx.addInitScript(() => { if (!localStorage.getItem('vds.ghToken')) { localStorage.setItem('vds.ghToken', 'x'); localStorage.setItem('vds.tmdbToken', 'y'); } });
@@ -156,14 +178,21 @@ const alMedia = (id, withRel) => {
   const ms = metaSaved();
   check(`meta.json su GitHub con la saga (557: ${JSON.stringify(ms['movie:557']?.co)}, 27205: ${JSON.stringify(ms['movie:27205']?.co)})`, JSON.stringify(ms['movie:557']?.co) === JSON.stringify([556, 'Spider-Man - Collezione']) && ms['movie:27205']?.co === 0);
 
-  // 2. pagina del film: «Saga» e trailer in inglese (in italiano non c'è)
+  // 2. pagina del film: riga della saga (come «Film e OVA») e trailer in inglese (in italiano non c'è)
   await page.goto(base + '#/t/movie/557');
   await page.waitForSelector('.facts');
+  await page.waitForSelector('.d-saga .pc', { timeout: 8000 }).catch(() => {});
   await page.waitForSelector('.trailer-btn', { timeout: 5000 }).catch(() => {});
-  check(`fatto «Saga»: ${await fact('Saga')}`, (await fact('Saga')) === 'Spider-Man');
+  check('niente più il dato «Saga» nella tabella', (await fact('Saga')) == null);
+  check(`riga della saga: ${await text('.d-saga .row-head')}`, (await text('.d-saga .sg-name')) === 'Spider-Man' && (await text('.d-saga .fr-count')) === '3/3' && (await text('.d-saga .row-all')) === 'Tutti 3');
+  check(`film della saga in ordine: ${(await texts('.d-saga .pc-title')).join(' → ')}`, (await texts('.d-saga .pc-title')).join('|') === 'Spider-Man|Spider-Man 2|Spider-Man 3');
+  check('la riga scorre in orizzontale', await page.$eval('.d-saga .scroller', (e) => getComputedStyle(e).overflowX === 'auto' || getComputedStyle(e).overflowX === 'scroll'));
+  check('niente esce dallo schermo', await noOverflow());
   check('tasto Trailer', (await page.$('.trailer-btn')) != null);
   check(`video chiesti in italiano e poi in inglese (${log.videos.filter((x) => x.startsWith('movie:557')).join(', ')})`, log.videos.filter((x) => x.startsWith('movie:557')).join(',') === 'movie:557:it-IT,movie:557:en-US');
+  await page.$eval('.d-saga', (e) => e.scrollIntoView({ block: 'center' }));
   await shot('sg01-film');
+  await page.evaluate(() => scrollTo(0, 0));
   await page.click('.trailer-btn');
   await page.waitForSelector('.tr-frame iframe');
   const src = await page.$eval('.tr-frame iframe', (f) => f.src);
@@ -174,7 +203,7 @@ const alMedia = (id, withRel) => {
   await page.waitForSelector('.sheet-wrap', { state: 'detached' });
 
   // 3. pagina della saga: ordine di uscita, visti su usciti, quello in uscita in fondo
-  await page.click('.facts a[href^="#/saga/"]');
+  await page.click('.d-saga .row-all');
   await page.waitForSelector('.person-grid .pc');
   check(`titolo: ${await text('.page-top h1')}`, (await text('.page-top h1')) === 'Spider-Man');
   check(`conteggio: ${await text('.person-count')}`, (await text('.person-count')) === '3 visti su 3');
@@ -183,6 +212,14 @@ const alMedia = (id, withRel) => {
   const order = await texts('.person-grid .pc-title');
   check(`saga in ordine di uscita: ${order.join(' → ')}`, order.join('|') === 'Spider-Man: Homecoming|Spider-Man: Far From Home|Spider-Man: No Way Home|Spider-Man: Brand New Day|Spider-Man 5 finto');
   check(`conteggio con un film in uscita: ${await text('.person-count')}`, (await text('.person-count')) === '3 visti su 4 · 1 in uscita');
+  // la stessa saga nella pagina di un suo film: visti su usciti, «Tutti» con tutti i film; nome lungo tagliato
+  await page.goto(base + '#/t/movie/315635');
+  await page.waitForSelector('.d-saga .pc', { timeout: 8000 });
+  check(`riga della saga lunga: ${await text('.d-saga .row-head')}`, (await text('.d-saga .fr-count')) === '3/4' && (await text('.d-saga .row-all')) === 'Tutti 5');
+  check('nome della saga su una riga sola', await page.$eval('.d-saga .sg-name', (e) => e.scrollHeight <= e.clientHeight + 2));
+  check('niente esce dallo schermo', await noOverflow());
+  await page.goto(base + '#/saga/531241');
+  await page.waitForSelector('.person-grid .pc');
   check(`anni: ${(await texts('.person-grid .pc-year')).join(', ')}`, (await texts('.person-grid .pc-year')).join(',') === '2017,2019,2021,2026,in uscita 2028');
   check('stato per i film in libreria', (await page.$$('.person-grid .pc .tube')).length === 3);
   check('niente esce dallo schermo', await noOverflow());
@@ -200,9 +237,11 @@ const alMedia = (id, withRel) => {
   check('scheda Libreria accesa', await page.$eval('#tabs a[data-tab=libreria]', (a) => a.classList.contains('on')));
   const sagas = await texts('.list-grid .lc');
   console.log('    saghe:', sagas.join(' | '));
-  check('saghe dei film in libreria', sagas.length === 3);
+  // con meta.json vero le saghe sono tante: TMDB finto conosce solo le tre di COLL, le altre restano «N in libreria»
+  const nSaghe = await page.evaluate(async () => { const s = await import("./js/store.js"); return new Set(Object.keys(s.lib().items).filter((k) => k.startsWith('movie:')).map((k) => s.metaOf(k)?.co?.[0]).filter(Boolean)).size; });
+  check(`saghe dei film in libreria (${sagas.length} su ${nSaghe})`, sagas.length === nSaghe && ['Spider-Man (Avengers)', 'Il Signore degli Anelli', 'Spider-Man'].every((n) => sagas.some((x) => x.startsWith(n + ' '))));
   check('prima quella a metà', sagas[0].startsWith('Spider-Man (Avengers)') && sagas[0].includes('3 di 4') && sagas[0].includes('75%'));
-  check('le finite dopo', sagas.slice(1).every((s) => s.includes('100%')));
+  check('le finite dopo', sagas.slice(1).filter((x) => x.includes('%')).every((x) => x.includes('100%')) && sagas.filter((x) => x.includes('100%')).length === 2);
   check('niente esce dallo schermo', await noOverflow());
   await shot('sg05-saghe');
 
@@ -213,25 +252,34 @@ const alMedia = (id, withRel) => {
   const row = await texts('.d-fr .pc-title');
   console.log('    film e OVA:', row.join(' | '));
   const labels = await texts('.d-fr .pc-year');
-  check(`in ordine di uscita: ${labels.join(', ')}`, labels.join(',') === 'Film · 2007,Film · 2008,Film · 2009,Speciale · 2009,OVA · 2010,Film · 2014,Film · 2015,ONA · 2016');
+  check(`in ordine di uscita: ${labels.join(', ')}`, labels.join(',') === 'Film · 2007,Film · 2008,Film · 2009,Speciale · 2009,OVA · 2010,Spin-off · 2012,Film · 2014,Film · 2015,ONA · 2016');
   check('niente film di Naruto (altra serie) né del seguito Boruto', !row.some((t) => /Ninja Clash|Boruto Movie|Il film$/.test(t) && !/Shippuden/.test(t)) && !row.includes('Naruto: Il film'));
-  check('niente serie TV, musica o personaggi', !row.some((t) => /Rock Lee|One Piece|MV/.test(t)));
+  check('niente musica, personaggi né la seconda parte (che è la serie stessa)', !row.some((t) => /One Piece|MV|Shippuuden 2/.test(t)) && !row.includes('Naruto Shippuden'));
+  check('spin-off (serie TV) con una carta sola anche se AniList ne ha due voci', row.filter((t) => /Rock Lee/.test(t)).length === 1);
   check(`titolo italiano di TMDB quando c'è: ${row[0]}`, row[0] === 'Naruto Shippuden: Il film');
-  check(`conteggio: ${await text('.d-fr .fr-count')}`, (await text('.d-fr .fr-count')) === '1/8');
+  check(`conteggio: ${await text('.d-fr .fr-count')}`, (await text('.d-fr .fr-count')) === '1/9');
   check('il film in libreria mostra lo stato', (await page.$$('.d-fr .pc .tube')).length === 1);
   const hrefs = await page.$$eval('.d-fr .pc', (as) => as.map((a) => [a.getAttribute('href'), a.target]));
   check('film su TMDB aperti nell’app', hrefs[0][0] === '#/t/movie/880001' && !hrefs[0][1]);
+  check('spin-off collegato alla serie TMDB', hrefs.some(([h, t]) => h === '#/t/tv/880020' && !t));
   check('OVA che TMDB non ha → AniList, fuori dall’app', hrefs.some(([h, t]) => h === 'https://anilist.co/anime/7001' && t === '_blank'));
   check('niente film sbagliato (non animazione)', !hrefs.some(([h]) => h === '#/t/movie/880010'));
   check(`AniList: ${log.al} richieste (≤ 8)`, log.al <= 8);
   const asked = log.alBody.flatMap((v) => v.ids || []);
   check('Naruto e Boruto non si allargano', !asked.includes(442) && !asked.includes(8888));
   check('niente esce dallo schermo', await noOverflow());
+  // filler da MyAnimeList: la serie e la sua seconda parte, ci si ferma al primo filler (pagina 2)
+  await page.waitForFunction(() => [...document.querySelectorAll('.facts dt')].some((d) => d.textContent.trim() === 'Filler'), null, { timeout: 10000 }).catch(() => {});
+  check(`«Filler: ${await fact('Filler')}»`, (await fact('Filler')) === 'Sì');
+  check(`Jikan sfogliato fino al primo filler (${log.jikan.join(', ')})`, log.jikan.join(',') === '101735:1,101735:2');
+  check('il «Sì» apre la lista degli episodi di MyAnimeList fuori dall’app', await page.$$eval('.facts dd a', (as) => as.some((a) => a.href === 'https://myanimelist.net/anime/101735/Nome_Finto/episode' && a.target === '_blank')));
+  await page.$eval('.facts', (e) => e.scrollIntoView({ block: 'center' }));
+  await shot('sg06b-filler');
   await page.$eval('.d-fr', (e) => e.scrollIntoView({ block: 'center' }));
   await shot('sg06-anime-riga');
   await page.click('.d-fr .row-all');
   await page.waitForSelector('.person-grid .pc');
-  check(`pagina «Tutti»: ${await text('.page-top h1')} · ${await text('.person-count')}`, (await text('.person-count')) === '1 visto su 8');
+  check(`pagina «Tutti»: ${await text('.page-top h1')} · ${await text('.person-count')}`, (await text('.person-count')) === '1 visto su 9');
   await shot('sg07-anime-tutti');
 
   // 6. riaprendo: dalla cache, niente AniList
@@ -241,6 +289,9 @@ const alMedia = (id, withRel) => {
   await page.goto(base + '#/t/tv/31910');
   await page.waitForSelector('.d-fr .pc');
   check(`seconda apertura senza AniList (${log.al} richieste)`, log.al === 0);
+  log.jikan = [];
+  await page.waitForTimeout(800);
+  check(`seconda apertura senza Jikan (${log.jikan.length} richieste) e «Filler» ancora lì`, log.jikan.length === 0 && (await fact('Filler')) === 'Sì');
 
   // 7. trailer della serie: italiano, il più recente ufficiale
   await page.waitForSelector('.trailer-btn');
@@ -265,6 +316,9 @@ const alMedia = (id, withRel) => {
   await page.goto(base + '#/t/tv/46260');
   await page.waitForSelector('.facts');
   check('serie completata: niente «Mancano»', (await fact('Mancano')) == null);
+  await page.waitForSelector('.d-fr .pc', { timeout: 20000 }).catch(() => {});
+  await page.waitForFunction(() => { try { return !!JSON.parse(localStorage.getItem('vds.filler') || '{}')['tv:46260']; } catch { return false; } }, null, { timeout: 10000 }).catch(() => {});
+  check(`Naruto senza filler su MyAnimeList: nessun dato (${log.jikan.join(', ')})`, (await fact('Filler')) == null && log.jikan.includes('100020:1'));
 
   // 9. AniList che chiede di aspettare: la riga non c'è, la pagina «Tutti» lo dice
   alMode = '429';

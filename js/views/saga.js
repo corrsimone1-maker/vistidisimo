@@ -1,5 +1,6 @@
-// Saghe dei film (collezioni di TMDB): la pagina di una saga (#/saga/<id>) con tutti i film in ordine di
-// uscita e «N visti su M», e l'elenco delle saghe dei film in libreria (#/saghe, dal menu ≡ della Libreria).
+// Saghe dei film (collezioni di TMDB): la riga nella pagina del film (come «Film e OVA» degli anime), la
+// pagina di una saga (#/saga/<id>) con tutti i film in ordine di uscita e «N visti su M», e l'elenco delle
+// saghe dei film in libreria (#/saghe, dal menu ≡ della Libreria).
 import { html, icon, img, posterCard, today } from '../ui.js';
 import { lib, item, metaOf, LS } from '../store.js';
 import { fetchCollection, tmdbToken, pool, sagaName } from '../tmdb.js';
@@ -51,6 +52,22 @@ function filmCard(f, t) {
   const extra = html`<span class="pc-title">${f.t}</span><span class="pc-year">${when}</span>`;
   if (item(key)) return cardFor(key, { extra });
   return posterCard({ key, href: `#/t/movie/${f.id}`, title: f.t, poster: f.p, kind: { type: 'movie', anime: isAnimeResult(f) }, status: null, extra });
+}
+
+// La riga nella pagina di un film: nome della saga, «visti/usciti», i film in ordine di uscita che
+// scorrono in orizzontale e «Tutti» → #/saga/<id>. co = [idCollezione, nome].
+export function sagaSection(co, rerender) {
+  repaint = rerender;
+  const s = getSaga(co[0]);
+  const name = s?.name || sagaName(co[1]);
+  if (!s) return tmdbToken() ? html`<section class="d-sec"><h2>${name}</h2><p class="muted">Carico la saga…</p></section>` : '';
+  if (s.err || !s.films?.length) return '';
+  const t = today();
+  const { seen, total } = sagaProgress(s, t);
+  return html`<section class="row d-fr d-saga">
+    <div class="row-head"><h2 class="sg-h"><span class="sg-name">${name}</span><span class="fr-count">${seen}/${total}</span></h2><a class="row-all" href="#/saga/${co[0]}">Tutti <span>${s.films.length}</span></a></div>
+    <div class="scroller" data-scroll="sg-${co[0]}">${s.films.map((f) => filmCard(f, t))}</div>
+  </section>`;
 }
 
 const head = (title) => html`<header class="page-top">

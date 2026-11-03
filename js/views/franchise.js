@@ -1,9 +1,10 @@
-// Film, OVA e speciali di un anime (da AniList, vedi js/anilist.js): una riga nella pagina della serie e
+// Film, OVA, speciali e spin-off di un anime (da AniList, vedi js/anilist.js): una riga nella pagina della serie e
 // la pagina con tutti (#/extra/<idSerie>). Quelli collegati a TMDB si aprono nell'app e mostrano il tuo
 // stato; quelli che TMDB non ha aprono la pagina di AniList.
 import { html, icon, posterCard } from '../ui.js';
 import { item, metaOf } from '../store.js';
 import { fetchFranchise, cachedFranchise, saveFranchise, FORMAT_LABEL } from '../anilist.js';
+import { checkFiller } from '../filler.js';
 import { cardFor, emptyState, titleOf } from './common.js';
 
 let repaint = () => {};
@@ -46,6 +47,8 @@ function card(x) {
 export function franchiseSection(key, it, m, title, rerender) {
   repaint = rerender;
   const st = get(key, m, title);
+  // da AniList arrivano anche gli id MyAnimeList: servono a sapere se ci sono filler
+  if (st.data?.mal?.length) checkFiller(key, st.data.mal, () => repaint());
   const items = st.data?.items || [];
   const id = key.split(':')[1];
   if (!items.length) return st.loading && !st.data ? html`<section class="d-sec"><h2>Film e OVA</h2><p class="muted">Cerco film e OVA…</p></section>` : '';

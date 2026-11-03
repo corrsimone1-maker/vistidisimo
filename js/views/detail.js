@@ -1,6 +1,6 @@
 import { html, raw, icon, img, fmtRating, fmtDay, today, daysBetween, statusLabel, openSheet, confirmSheet, promptSheet, toast, kindBadge, tube, esc, fmtClock } from '../ui.js';
 import { item, metaOf, lib, putMeta, scheduleMetaSave } from '../store.js';
-import { fetchDetails, fetchImages, metaFromDetails, tmdbToken, movieDirectors, sagaName, fetchTrailer } from '../tmdb.js';
+import { fetchDetails, fetchImages, metaFromDetails, tmdbToken, movieDirectors, fetchTrailer } from '../tmdb.js';
 import { isAnime, isAnimeResult, progress, isWatched, isAired, epRange, watchedCount, airedCount, nextEpisode, rewatchOf, furthest, lastWatchDate, unwatchedAired } from '../derive.js';
 import * as A from '../actions.js';
 import { getSeason } from './upcoming.js';
@@ -8,6 +8,8 @@ import { titleOf, seenTitles } from './common.js';
 import { agoText, watchedEpisodeSheet } from './episode.js';
 import { openPauseEditor, pauseText } from './menu.js';
 import { franchiseSection } from './franchise.js';
+import { sagaSection } from './saga.js';
+import { fillerInfo } from '../filler.js';
 
 let cur = { key: null, d: null, err: '', open: new Set() };
 // dettagli già scaricati in questa sessione: tornando su un titolo la pagina è subito completa
@@ -242,9 +244,6 @@ export function renderDetail(type, id, rerender) {
     // regia: ogni nome porta a tutti i suoi film
     const dirs = movieDirectors(d).slice(0, 3);
     if (dirs.length) facts.push(['Regia', dirs.map((x, i) => html`${i ? ', ' : ''}<a class="person" href="#/persona/${x.id}">${x.name}</a>`)]);
-    // saga: porta alla pagina con tutti i suoi film
-    const co = d ? (d.belongs_to_collection ? [d.belongs_to_collection.id, d.belongs_to_collection.name] : null) : m?.co;
-    if (co) facts.push(['Saga', html`<a class="person" href="#/saga/${co[0]}">${sagaName(co[1])}</a>`]);
     if (d?.release_date || m?.rd) facts.push(['Uscita', fmtDay(d?.release_date || m.rd)]);
     if (d?.runtime || m?.rt) facts.push(['Durata', runtimeText(d?.runtime || m.rt)]);
     if (it?.pause) facts.push(['Fermo a', pauseFact(it)]);
@@ -264,7 +263,12 @@ export function renderDetail(type, id, rerender) {
       if (it.pause) facts.push(['Fermo a', pauseFact(it)]);
     }
     if (d?.episode_run_time?.length || m?.rt) facts.push(['Durata episodi', runtimeText(d?.episode_run_time?.[0] || m.rt)]);
+    // filler: solo se ce ne sono (secondo MyAnimeList); quali sono, li guarda Simo dal link
+    const fl = anime ? fillerInfo(key) : null;
+    if (fl?.f) facts.push(['Filler', html`<a class="person" href="${fl.u}" target="_blank" rel="noopener">Sì</a>`]);
   }
+  // saga (collezione TMDB) del film: riga come «Film e OVA» degli anime
+  const co = type === 'movie' ? (d ? (d.belongs_to_collection ? [d.belongs_to_collection.id, d.belongs_to_collection.name] : null) : m?.co) : null;
 
   const seasonsHtml = type === 'tv' ? (() => {
     const list = seasonList(m);
@@ -301,6 +305,7 @@ export function renderDetail(type, id, rerender) {
     ${resumeHtml(key, it, m)}
     ${seasonsHtml}
     ${type === 'tv' && anime ? franchiseSection(key, it, m, it?.title || title, rerender) : ''}
+    ${co ? sagaSection(co, rerender) : ''}
     <section class="d-sec">
       <h2>Liste</h2>
       ${inLists.length ? html`<div class="d-lists">${inLists.map((l) => html`<a class="chip-s link" href="#/lista/${encodeURIComponent(l.id)}">${l.title}</a>`)}</div>` : html`<p class="muted">Non è in nessuna lista.</p>`}
