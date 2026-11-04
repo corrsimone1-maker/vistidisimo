@@ -3,7 +3,8 @@
 //
 // Si trova la voce di Wikidata con l'id TMDB (P4947 film, P4983 serie) e si prendono le voci collegate
 // che hanno anche loro un id TMDB:
-// - seguiti e prequel (P155 «preceduto da», P156 «seguito da»), anche in catena;
+// - seguiti e prequel (P155 «preceduto da», P156 «seguito da»), fino a 3 passi (una catena senza limite
+//   può far scadere la query sul servizio vero; le saghe di film lunghe le dà già TMDB);
 // - spin-off (P2512), opere derivate (P4969) e «basato su» (P144), in tutte e due le direzioni, e gli
 //   altri spin-off e opere derivate dello stesso titolo (da «La casa di carta: Corea» anche «Berlino»);
 // - la serie o il franchise di cui fa parte (P179, P8345), se ha un id TMDB, e chi ne fa parte;
@@ -27,7 +28,7 @@ export function wdQuery(type, id) {
 SELECT DISTINCT ?tv ?mv WHERE {
   ?item wdt:${P} ${lit} .
   {
-    ?item (wdt:P155|wdt:P156|^wdt:P155|^wdt:P156)+ ?r .
+    ?item (wdt:P155|wdt:P156|^wdt:P155|^wdt:P156)/(wdt:P155|wdt:P156|^wdt:P155|^wdt:P156)?/(wdt:P155|wdt:P156|^wdt:P155|^wdt:P156)? ?r .
   } UNION {
     ?item (wdt:P2512|wdt:P4969|wdt:P144|^wdt:P2512|^wdt:P4969|^wdt:P144) ?r .
   } UNION {
