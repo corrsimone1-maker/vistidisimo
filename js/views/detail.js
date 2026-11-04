@@ -1,7 +1,7 @@
 import { html, raw, icon, img, fmtRating, fmtDay, today, statusLabel, openSheet, confirmSheet, promptSheet, toast, kindBadge, tube, esc, fmtClock } from '../ui.js';
 import { item, metaOf, lib, putMeta, scheduleMetaSave } from '../store.js';
-import { fetchDetails, fetchImages, metaFromDetails, tmdbToken, movieDirectors, fetchTrailer, nonLatin } from '../tmdb.js';
-import { isAnime, isAnimeResult, progress, isWatched, isAired, epRange, watchedCount, airedCount, rewatchOf, furthest, unwatchedAired } from '../derive.js';
+import { fetchDetails, fetchImages, metaFromDetails, tmdbToken, movieDirectors, fetchTrailer, nonLatin, romajiFromTitles } from '../tmdb.js';
+import { isAnime, isAnimeResult, progress, isWatched, isAired, epRange, watchedCount, airedCount, rewatchOf, furthest, unwatchedAired, seasonTimes, seriesTimes } from '../derive.js';
 import * as A from '../actions.js';
 import { getSeason } from './upcoming.js';
 import { titleOf, seenTitles } from './common.js';
@@ -9,7 +9,7 @@ import { watchedEpisodeSheet } from './episode.js';
 import { openPauseEditor, pauseText } from './menu.js';
 import { collectionSection, collectionEditSheet } from './collezione.js';
 import { fillerInfo } from '../filler.js';
-import { romajiOf, ensureRomaji, norm } from '../mal.js';
+import { romajiOf, ensureRomaji, rememberRomaji, norm } from '../mal.js';
 
 let cur = { key: null, d: null, err: '', open: new Set() };
 // dettagli già scaricati in questa sessione: tornando su un titolo la pagina è subito completa
@@ -24,10 +24,16 @@ async function load(type, id) {
   const key = `${type}:${id}`;
   if (!tmdbToken()) return;
   try {
-    const d = await fetchDetails(type, id, { overview: true, credits: type === 'movie' });
+    const d = await fetchDetails(type, id, { overview: true, credits: type === 'movie', titles: true });
     if (cur.key !== key) return;
     if (!d) { cur.err = 'TMDB non conosce questo titolo.'; repaint(); return; }
     cur.d = d;
+    // titolo originale in una scrittura che Simo non legge: il romaji dai titoli alternativi di TMDB
+    // (subito, senza aspettare MyAnimeList; se poi MyAnimeList ne ha uno, vale quello)
+    if (nonLatin(d.original_title || d.original_name)) {
+      const anime = isAnimeResult({ genre_ids: (d.genres || []).map((g) => g.id), original_language: d.original_language, origin_country: d.origin_country }) || isAnime(item(key) || {}, metaOf(key));
+      rememberRomaji(key, romajiFromTitles(d, { loose: anime }));
+    }
     seenDetails.set(key, { d, open: cur.open });
     seenTitles.set(key, { title: d.title || d.name || '', year: Number((d.release_date || d.first_air_date || '').slice(0, 4)) || null });
     if (item(key) || metaOf(key)) { putMeta(key, metaFromDetails(type, d)); scheduleMetaSave(); }
@@ -105,6 +111,8 @@ function seasonBlock(key, it, m, s) {
   const open = cur.open.has(s.n);
   const p = s.count ? Math.min(1, watched / s.count) : 0;
   const allDone = s.count > 0 && watched >= s.count;
+  // stagione vista tutta più volte: «×N» al posto della spunta
+  const times = allDone ? seasonTimes(it, s.n, s.count) : 0;
   let body = '';
   if (open) {
     const { eps, loaded } = seasonEpisodes(id, s, s.count);
@@ -126,14 +134,14 @@ function seasonBlock(key, it, m, s) {
     </ul>
     ${watched ? html`<a class="btn ghost small season-rp" href="#/ripasso/${id}/${s.n}">${icon.list}Ripassa</a>` : ''}`;
   }
-  return html`<div class="season ${open ? 'open' : ''}">
+  return html`<div class="season ${open ? 'open' : ''} ${allDone ? 'done' : ''}">
     <div class="season-row">
       <button class="season-head" data-act="d-season" data-s="${s.n}" aria-expanded="${open}">
         <span class="s-name">${s.n === 0 ? 'Speciali' : (s.name || `Stagione ${s.n}`)}</span>
         <span class="s-count">${watched}/${s.count}</span>
         <span class="chev">${icon.chevron}</span>
       </button>
-      <button class="check-btn small ${allDone ? 'on' : ''}" data-act="d-season-all" data-s="${s.n}" aria-label="${allDone ? 'Rivista o non vista' : 'Segna tutta la stagione'}">${icon.check}</button>
+      <button class="check-btn small ${allDone ? 'on' : ''}" data-act="d-season-all" data-s="${s.n}" aria-label="${allDone ? `Vista ${times} ${times === 1 ? 'volta' : 'volte'}: rivista o non vista` : 'Segna tutta la stagione'}">${times > 1 ? html`<span class="x-n">×${times}</span>` : icon.check}</button>
     </div>
     ${it ? tube(it.status, p) : ''}
     ${body}
@@ -149,12 +157,14 @@ function resumeHtml(key, it) {
   return html`<a class="btn ghost wide d-rp" href="#/ripasso/${id}/${fs}">${icon.list}Ripassa gli episodi visti</a>`;
 }
 
-// Quante volte hai rivisto tutto il titolo: un piccolo bottone accanto allo stato, con il numero.
-const canRewatch = (it) => !!it && (it.type === 'tv' ? watchedCount(it) > 0 : it.status === 'completed');
+// Quante volte hai visto tutto il titolo: un piccolo bottone accanto allo stato, con «×N» come i cerchi
+// delle stagioni. Per una serie c'è solo quando l'hai vista tutta, e il numero viene dalle stagioni (tutte
+// «×3» → «×3»).
+const canRewatch = (it) => !!it && (it.type === 'tv' ? seriesTimes(it, metaOf(`tv:${it.id}`)) > 0 : it.status === 'completed');
 function rewatchChip(it) {
   if (!canRewatch(it)) return '';
-  const n = it.rewatch || 0;
-  return html`<button class="rw-chip ${n ? 'has' : ''}" data-act="d-rw" aria-label="${it.type === 'tv' ? 'Rivista tutta' : 'Rivisto'}: ${n}">${icon.replay}${n ? html`<b>${n}</b>` : ''}</button>`;
+  const times = A.titleRewatch(it) + 1;
+  return html`<button class="rw-chip ${times > 1 ? 'has' : ''}" data-act="d-rw" aria-label="${it.type === 'tv' ? 'Vista' : 'Visto'} ${times} ${times === 1 ? 'volta' : 'volte'}">${icon.replay}${times > 1 ? html`<b>×${times}</b>` : ''}</button>`;
 }
 
 function rewatchSheet() {
@@ -162,13 +172,13 @@ function rewatchSheet() {
   if (!canRewatch(it)) return;
   const tv = it.type === 'tv';
   const paint = (el) => {
-    const n = item(key).rewatch || 0;
-    el.querySelector('.rw-step-n').textContent = n;
-    el.querySelector('.rw-step-sub').textContent = n ? `${tv ? 'vista' : 'visto'} ${n + 1} volte` : (tv ? 'mai rivista' : 'mai rivisto');
-    el.querySelector('[data-rw="-1"]').disabled = !n;
+    const times = A.titleRewatch(item(key)) + 1;
+    el.querySelector('.rw-step-n').textContent = times;
+    el.querySelector('.rw-step-sub').textContent = times === 1 ? 'volta' : 'volte';
+    el.querySelector('[data-rw="-1"]').disabled = times < 2;
   };
   openSheet(String(html`
-    <h3 class="sheet-title">${tv ? 'Rivista tutta' : 'Rivisto'}</h3>
+    <h3 class="sheet-title">${tv ? 'Vista tutta' : 'Visto'}</h3>
     <div class="rw-step">
       <button class="icon-btn round" data-rw="-1" aria-label="Una volta in meno">${icon.minus}</button>
       <div><span class="rw-step-n">0</span><span class="rw-step-sub"></span></div>
@@ -178,7 +188,7 @@ function rewatchSheet() {
     className: 'rw-sheet',
     onMount: (el) => {
       paint(el);
-      el.querySelectorAll('[data-rw]').forEach((b) => { b.onclick = () => { A.setRewatch(key, (item(key).rewatch || 0) + Number(b.dataset.rw)); paint(el); }; });
+      el.querySelectorAll('[data-rw]').forEach((b) => { b.onclick = () => { A.setRewatch(key, A.titleRewatch(item(key)) + Number(b.dataset.rw)); paint(el); }; });
     },
   });
 }
@@ -205,10 +215,10 @@ export function renderDetail(type, id, rerender) {
   const anime = it ? isAnime(it, m) : (d ? isAnimeResult({ genre_ids: (d.genres || []).map((g) => g.id), original_language: d.original_language, origin_country: d.origin_country }) : isAnime({}, m));
   // titolo originale: per gli anime in giapponese il romaji di MyAnimeList (es. «Shingeki no Kyojin»);
   // mai in una scrittura che Simo non legge (giapponese, coreano…)
-  let orig = d?.original_title || d?.original_name || '';
-  if (orig && anime && nonLatin(orig)) {
+  let orig = d?.original_title || d?.original_name || m?.ot || '';
+  if (orig && nonLatin(orig)) {
     const ro = romajiOf(key);
-    if (!ro) ensureRomaji(key, { ot: orig, t: title, y: yr }, rerender);
+    if (!ro && anime) ensureRomaji(key, { ot: orig, t: title, y: yr }, rerender);
     orig = ro;
   }
   if (nonLatin(orig)) orig = '';

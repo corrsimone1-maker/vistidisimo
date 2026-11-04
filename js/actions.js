@@ -1,6 +1,6 @@
 // Azioni dell'utente: ognuna produce operazioni sulla libreria.
 import { dispatch, item, metaOf, ensureMeta } from './store.js';
-import { autoStatus, unwatchedBefore, unwatchedAired, rewatchOf, watchedList, isWatched } from './derive.js';
+import { autoStatus, unwatchedBefore, unwatchedAired, rewatchOf, watchedList, isWatched, seriesTimes } from './derive.js';
 import { today, toast, statusLabel, fmtClock } from './ui.js';
 
 const nowIso = () => new Date().toISOString();
@@ -108,22 +108,37 @@ function rwOps(it, list, delta) {
   return list.map(([s, e]) => [String(s), String(e), Math.max(0, rewatchOf(it, s, e) + delta)]);
 }
 
-// Quante volte hai rivisto per intero un titolo. Per una serie, ogni rivisione intera conta
-// anche come una visione in più di ogni episodio visto (e toglierla la toglie anche agli episodi).
+// Rivisioni intere di un titolo: quelle di un film stanno in `rewatch`; quelle di una serie sono il
+// minimo delle rivisioni dei suoi episodi (`seriesTimes` − 1), e `rewatch` ne è solo una copia.
+export const titleRewatch = (it) => (it?.type === 'tv' ? Math.max(0, seriesTimes(it, metaOf(`tv:${it.id}`)) - 1) : (it?.rewatch || 0));
+
+// Tiene `rewatch` di una serie uguale alle rivisioni dei suoi episodi (dopo una stagione o un episodio rivisto).
+function syncSeriesRewatch(key) {
+  const it = item(key);
+  if (!it || it.type !== 'tv') return;
+  const v = titleRewatch(it);
+  if ((it.rewatch || 0) !== v) dispatch({ op: 'set', key, fields: { rewatch: v } });
+}
+
+// Quante volte hai rivisto per intero un titolo. Per una serie (vista tutta) ogni rivisione intera è una
+// visione in più di ogni episodio visto, e toglierla la toglie anche agli episodi: così anche ogni
+// stagione passa da «×N» a «×N+1».
 export function setRewatch(key, n) {
   const it = item(key);
   if (!it) return;
-  const old = it.rewatch || 0;
+  const tv = it.type === 'tv';
+  if (tv && !seriesTimes(it, metaOf(key))) return;
+  const old = titleRewatch(it);
   const v = Math.max(0, Math.min(99, n));
   if (v === old) return;
   const fields = { rewatch: v };
   if (v > old) fields.last = nowIso();
-  if (it.type === 'movie' && v > old) { fields.status = 'completed'; if (!it.seen) fields.seen = today(); }
-  const word = it.type === 'movie' ? 'Rivisto' : 'Rivista';
-  const ops = [{ op: 'set', key, fields, msg: v > old ? `${word} ${it.title} (${v + 1}ª volta)` : `${it.title}: rivisioni ${v}` }];
-  if (it.type === 'tv') {
+  if (!tv && v > old) { fields.status = 'completed'; if (!it.seen) fields.seen = today(); }
+  const word = tv ? 'Rivista' : 'Rivisto';
+  const ops = [{ op: 'set', key, fields, msg: v > old ? `${word} ${it.title} (${v + 1}ª volta)` : `${it.title}: ${tv ? 'vista' : 'visto'} ${v + 1} ${v ? 'volte' : 'volta'}` }];
+  if (tv) {
     // salta gli episodi che resterebbero a zero comunque
-    const set = rwOps(it, watchedList(it), v - old).filter(([s, e, n]) => n > 0 || rewatchOf(it, s, e) > 0);
+    const set = rwOps(it, watchedList(it), v - old).filter(([s, e, x]) => x > 0 || rewatchOf(it, s, e) > 0);
     if (set.length) ops.push({ op: 'rw', key, set });
   }
   dispatch(...ops);
@@ -140,6 +155,7 @@ export function setEpisodeRewatch(key, s, e, n) {
   const ops = [{ op: 'rw', key, set: [[String(s), String(e), v]], msg: `${it.title} ${epLabel(s, e)}: ${v ? `visto ${v + 1} volte` : 'mai rivisto'}` }];
   if (v > old) ops.push({ op: 'set', key, fields: { last: nowIso() } });
   dispatch(...ops);
+  syncSeriesRewatch(key);
   if (v > old) finishPause(key, [[s, e]]);
 }
 
@@ -157,11 +173,12 @@ export function rewatchSeason(key, s, delta = 1) {
   if (delta > 0) ops.push({ op: 'set', key, fields: { last: nowIso() } });
   const pause = it.pause ? { ...it.pause } : null;
   dispatch(...ops);
+  syncSeriesRewatch(key);
   if (delta > 0) {
     finishPause(key, list);
     toast(`${s === 0 ? 'Speciali rivisti' : `Stagione ${s} rivista`}`, {
       label: 'Annulla',
-      run: () => { dispatch({ op: 'rw', key, set: before, msg: `Annulla rivisione di ${it.title}` }); if (pause && !item(key)?.pause) restorePause(key, pause); },
+      run: () => { dispatch({ op: 'rw', key, set: before, msg: `Annulla rivisione di ${it.title}` }); syncSeriesRewatch(key); if (pause && !item(key)?.pause) restorePause(key, pause); },
     });
   }
 }

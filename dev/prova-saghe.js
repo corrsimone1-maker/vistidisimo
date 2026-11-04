@@ -168,7 +168,8 @@ const malAnime = (id, full) => {
   await ctx.route('https://query.wikidata.org/**', (route) => route.fulfill({ status: 200, contentType: 'application/sparql-results+json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify({ head: { vars: ['tv', 'mv'] }, results: { bindings: [] } }) }));
   await ctx.route('https://cdn.myanimelist.net/**', (route) => M.image({ request: () => ({ url: () => 'https://x/p_' + route.request().url().split('/').pop() }), fulfill: (o) => route.fulfill(o) }));
   await ctx.route(/youtube(-nocookie)?\.com/, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<body style="background:#111;color:#eee;font:16px sans-serif;display:grid;place-items:center;height:100vh;margin:0">▶ video</body>' }));
-  await ctx.addInitScript(() => { if (!localStorage.getItem('vds.ghToken')) { localStorage.setItem('vds.ghToken', 'x'); localStorage.setItem('vds.tmdbToken', 'y'); } });
+  // Jikan è spento nell'app (API pubblica chiusa il 1/10/2026): qui si riaccende per provare il codice con un Jikan finto
+  await ctx.addInitScript(() => { localStorage.setItem('vds.jikanOn', '1'); if (!localStorage.getItem('vds.ghToken')) { localStorage.setItem('vds.ghToken', 'x'); localStorage.setItem('vds.tmdbToken', 'y'); } });
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
   page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push('console: ' + m.text()); });
@@ -261,6 +262,8 @@ const malAnime = (id, full) => {
   log.mal = [];
   await page.goto(base + '#/t/tv/31910');
   await page.waitForSelector('.d-fr .pc', { timeout: 20000 });
+  // mentre MyAnimeList risponde la riga mostra quello che c'è già: si aspetta l'elenco completo
+  await page.waitForFunction(() => document.querySelectorAll('.d-fr .pc').length >= 12, null, { timeout: 40000 }).catch(() => {});
   const row = await texts('.d-fr .pc-title');
   console.log('    film e OVA:', row.join(' | '));
   const labels = await texts('.d-fr .pc-year');

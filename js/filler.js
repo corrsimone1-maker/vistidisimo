@@ -8,7 +8,7 @@
 // parti che su TMDB sono la stessa serie. Si sfogliano gli episodi 100 alla volta e ci si ferma al primo
 // filler. Risultato sul telefono (`vds.filler`): { f: true, u } oppure { f: false }, con `ids` e `at`.
 import { LS } from './store.js';
-import { jikan } from './jikan.js';
+import { jikan, jikanDown } from './jikan.js';
 
 const DAY = 24 * 3600 * 1000;
 const TTL_YES = 90 * DAY;
@@ -27,11 +27,11 @@ function save(key, v) {
 }
 
 // { f: true, u } al primo filler, { f: false } se non ce ne sono, null se MyAnimeList non risponde.
-async function scan(ids) {
+async function scan(key, ids) {
   for (const id of ids) {
     for (let n = 1; n <= MAX_PAGES; n++) {
       let j;
-      try { j = await jikan(`/anime/${id}/episodes?page=${n}`); } catch { return null; }
+      try { j = await jikan(`/anime/${id}/episodes?page=${n}`, { key }); } catch { return null; }
       if (!j) break; // MyAnimeList non ha questa voce
       const f = (j.data || []).find((e) => e && e.filler === true);
       if (f) {
@@ -52,8 +52,9 @@ export function checkFiller(key, ids, done) {
   if (!ids?.length || tried.has(key)) return;
   const c = fillerInfo(key);
   if (c && sameIds(c.ids, ids) && Date.now() - (c.at || 0) < (c.f ? TTL_YES : TTL_NO)) return;
+  if (jikanDown()) return; // MyAnimeList spento o che non risponde: resta quello che si sapeva
   tried.add(key);
-  scan(ids)
+  scan(key, ids)
     .then((r) => { if (r) { save(key, { ...r, ids, at: Date.now() }); done(); } })
     .catch(() => {});
 }

@@ -147,6 +147,25 @@ document.addEventListener('click', (ev) => {
   ev.preventDefault();
   fn(el, ctx(ev));
 });
+// Tasto della barra toccato di nuovo quando sei già nella sua schermata (scelta di Simo, 3/11/2026): si torna
+// in cima; su Cerca in più la casella si svuota (se c'era scritto qualcosa) e si apre la tastiera. Il focus
+// va dato subito, dentro il tocco, se no Safari su iPhone non apre la tastiera.
+document.getElementById('tabs')?.addEventListener('click', (ev) => {
+  const a = ev.target.closest('a[data-tab]');
+  if (!a || parse(location.hash).name !== a.dataset.tab) return;
+  ev.preventDefault();
+  const smooth = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (a.dataset.tab === 'cerca') {
+    const box = view.querySelector('[data-input=search-q]');
+    window.scrollTo(0, 0);
+    if (box) {
+      if (box.value) { box.value = ''; box.dispatchEvent(new Event('input', { bubbles: true })); }
+      box.focus();
+    }
+    return;
+  }
+  window.scrollTo({ top: 0, behavior: smooth ? 'smooth' : 'auto' });
+});
 document.addEventListener('input', (ev) => {
   const el = ev.target.closest('[data-input]');
   if (!el || el.tagName === 'SELECT') return;

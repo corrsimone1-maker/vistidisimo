@@ -193,6 +193,29 @@ export function rewatchOf(it, s, e) {
   return it?.rw?.[String(s)]?.[String(e)] || 0;
 }
 
+// Quante volte hai visto tutta una stagione (count = i suoi episodi): 0 se non è vista tutta, altrimenti
+// 1 + le rivisioni che hanno tutti i suoi episodi (il minimo). Il cerchio della stagione mostra «×N».
+export function seasonTimes(it, s, count) {
+  const eps = it?.eps?.[String(s)];
+  if (!eps || !count) return 0;
+  const ks = Object.keys(eps);
+  if (ks.length < count) return 0;
+  return 1 + Math.min(...ks.map((e) => rewatchOf(it, s, e)));
+}
+
+// Quante volte hai visto tutta una serie (scelta di Simo, 3/11/2026: stagioni e serie devono dirsi la
+// stessa cosa): 0 se manca qualche episodio uscito delle stagioni regolari, altrimenti 1 + il minimo delle
+// rivisioni dei suoi episodi. Così se ogni stagione è «×2» la serie è vista 2 volte, e viceversa.
+// Senza dati TMDB vale come vista tutta se è completata o in pari. Il campo `rewatch` delle serie in
+// library.json ne è solo una copia (= questo − 1), aggiornata dalle azioni sulle rivisioni.
+export function seriesTimes(it, m) {
+  if (!it || it.type !== 'tv') return 0;
+  const list = watchedList(it);
+  if (!list.length) return 0;
+  if (m?.ss?.length ? unwatchedAired(it, m).length : !['completed', 'uptodate'].includes(it.status)) return 0;
+  return 1 + Math.min(...list.map(([s, e]) => rewatchOf(it, s, e)));
+}
+
 // Totale delle visioni in più di tutti gli episodi di una serie.
 export function rewatchEpisodes(it) {
   let n = 0;

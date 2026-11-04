@@ -76,9 +76,10 @@ const NON_LATIN = /[\u0400-\u04ff\u0590-\u06ff\u0e00-\u0e7f\u3040-\u30ff\u3400-\
 export const nonLatin = (s) => !!s && NON_LATIN.test(s);
 
 // Dettagli in italiano; se il titolo non è leggibile (o manca la trama e serve) ripiega sull'inglese.
-export async function fetchDetails(type, id, { overview = false, credits = false } = {}) {
+// titles: anche i titoli alternativi (servono al romaji, vedi romajiFromTitles)
+export async function fetchDetails(type, id, { overview = false, credits = false, titles = false } = {}) {
   // per le serie anche gli id esterni (TVDB, IMDb): servono per esportare verso altre app
-  const extra = [credits && 'credits', type === 'tv' && 'external_ids'].filter(Boolean).join(',');
+  const extra = [credits && 'credits', type === 'tv' && 'external_ids', titles && 'alternative_titles'].filter(Boolean).join(',');
   const d = await tm(`/${type}/${id}`, extra ? { append_to_response: extra } : {});
   if (!d) return d;
   const k = type === 'movie' ? 'title' : 'name';
@@ -262,6 +263,20 @@ export async function searchTmdb(type, query, language = 'it-IT') {
 export async function fetchTvIds(id) {
   const d = await tm(`/tv/${id}/external_ids`, { language: null });
   return { im: d?.imdb_id || null, tvdb: d?.tvdb_id || null };
+}
+
+// Titolo originale in lettere latine (romaji, romanizzazione coreana…) dai titoli alternativi di TMDB, per
+// quando l'originale è in una scrittura che Simo non legge. Le regole di TMDB dicono di mettere il titolo
+// romanizzato col paese d'origine, ma non fissano il «tipo»: prima quelli col tipo «Romaji»/«Romanization»,
+// poi (solo se `loose`, per gli anime) un titolo giapponese in lettere latine che sembra romaji.
+const ROMAJI_HINT = /\b(no|ni|wa|ga|wo|to|de|mo|na|ka)\b|ou|uu|tsu|shi|chi|kyo|ryu|sho|shu|jou/i;
+export function romajiFromTitles(d, { loose = false } = {}) {
+  const list = d?.alternative_titles?.results || d?.alternative_titles?.titles || [];
+  const latin = list.filter((x) => x?.title && !nonLatin(x.title));
+  const typed = latin.find((x) => /roma/i.test(x.type || ''));
+  if (typed) return typed.title.trim();
+  if (!loose) return '';
+  return latin.find((x) => x.iso_3166_1 === 'JP' && ROMAJI_HINT.test(x.title))?.title.trim() || '';
 }
 
 // Esegue i lavori con al massimo `n` richieste contemporanee.

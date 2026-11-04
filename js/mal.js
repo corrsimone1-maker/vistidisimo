@@ -87,10 +87,11 @@ function saveNodes() {
     LS.set('vds.mal.node', all);
   }, 500);
 }
-async function getNode(id) {
+// key: il titolo per cui serve (le richieste del titolo aperto passano prima, vedi js/jikan.js)
+async function getNode(id, key) {
   const c = nodeCache()[id];
   if (c && Date.now() - c.at < NODE_TTL) return c;
-  const j = await jikan(`/anime/${id}/full`);
+  const j = await jikan(`/anime/${id}/full`, { key });
   if (!j?.data) return null;
   const n = { ...slim(j.data), at: Date.now() };
   nodeCache()[id] = n;
@@ -106,31 +107,36 @@ async function findTmdb(n, { anyYear = false } = {}) {
   const year = n.year || null;
   const types = n.type === 'Movie' ? ['movie'] : SERIESLIKE.has(n.type) ? ['tv'] : ['tv', 'movie'];
   let best = null;
-  for (const q of [...new Set(titles(n))]) {
-    for (const type of types) {
-      const res = await searchTmdb(type, q).catch(() => []);
-      for (const r of res.slice(0, 8)) {
-        if (!(r.genre_ids || []).includes(16)) continue;
-        const ry = Number((r.release_date || r.first_air_date || '').slice(0, 4)) || null;
-        const yearOk = year && ry ? Math.abs(ry - year) <= 1 : false;
-        if (!yearOk && !anyYear) continue;
-        const s = Math.max(
-          sim(r.original_title || r.original_name, n.ja),
-          sim(r.title || r.name, n.en), sim(r.title || r.name, n.ro),
-          sim(r.original_title || r.original_name, n.ro),
-        );
-        const score = s + (yearOk ? 0.05 : 0);
-        if (s >= (anyYear && !yearOk ? 0.8 : 0.6) && (!best || score > best.score)) {
-          best = { score, key: `${type}:${r.id}`, t: r.title || r.name || '', p: r.poster_path || null };
-        }
+  // tutte le ricerche insieme (prima si facevano una dopo l'altra: lento)
+  const asks = [...new Set(titles(n))].flatMap((q) => types.map((type) => [q, type]));
+  const answers = await Promise.all(asks.map(([q, type]) => searchTmdb(type, q).then((res) => [type, res]).catch(() => [type, []])));
+  for (const [type, res] of answers) {
+    for (const r of res.slice(0, 8)) {
+      if (!(r.genre_ids || []).includes(16)) continue;
+      const ry = Number((r.release_date || r.first_air_date || '').slice(0, 4)) || null;
+      const yearOk = year && ry ? Math.abs(ry - year) <= 1 : false;
+      if (!yearOk && !anyYear) continue;
+      const s = Math.max(
+        sim(r.original_title || r.original_name, n.ja),
+        sim(r.title || r.name, n.en), sim(r.title || r.name, n.ro),
+        sim(r.original_title || r.original_name, n.ro),
+      );
+      const score = s + (yearOk ? 0.05 : 0);
+      if (s >= (anyYear && !yearOk ? 0.8 : 0.6) && (!best || score > best.score)) {
+        best = { score, key: `${type}:${r.id}`, t: r.title || r.name || '', p: r.poster_path || null };
       }
-      if (best && best.score >= 0.95) return best;
     }
   }
   return best;
 }
 
 function mapCache() { return LS.get('vds.mal.map', {}) || {}; }
+// collegamento già noto (senza chiedere niente): { key, t, p }, null = non c'è, undefined = non si sa
+function knownMap(id) {
+  const hit = mapCache()[id];
+  if (!hit || Date.now() - hit.at >= (hit.k ? HIT_TTL : MISS_TTL)) return undefined;
+  return hit.k ? { key: hit.k, t: hit.t, p: hit.p } : null;
+}
 async function mapToTmdb(n, opts) {
   const hit = mapCache()[n.id];
   if (hit && Date.now() - hit.at < (hit.k ? HIT_TTL : MISS_TTL)) return hit.k ? { key: hit.k, t: hit.t, p: hit.p } : null;
@@ -142,11 +148,12 @@ async function mapToTmdb(n, opts) {
 }
 
 // ---- un titolo TMDB su MyAnimeList ----
-// names: titoli TMDB (originale, italiano…), year: anno di uscita, kinds: tipi di MyAnimeList ammessi.
-async function findMal(names, year, kinds) {
+// names: titoli TMDB (originale, italiano…), year: anno di uscita, kinds: tipi di MyAnimeList ammessi,
+// key: il titolo TMDB per cui si cerca (precedenza nella fila di Jikan).
+async function findMal(names, year, kinds, key) {
   const qs = [...new Set(names.filter(Boolean))];
   for (const q of qs) {
-    const d = await jikan(`/anime?q=${encodeURIComponent(q)}&limit=15`);
+    const d = await jikan(`/anime?q=${encodeURIComponent(q)}&limit=15`, { key });
     const res = (d?.data || []).map(slim).filter((x) => !x.adult && kinds.has(x.type));
     const ok = res.filter((x) => x.year && year && Math.abs(x.year - year) <= 1)
       .map((x) => ({ x, s: Math.max(...titles(x).map((t) => Math.max(...qs.map((n) => sim(t, n))))) + (x.year === year ? 0.05 : 0) }))
@@ -157,7 +164,7 @@ async function findMal(names, year, kinds) {
   return null;
 }
 // La serie: m = dati TMDB della serie (meta.json): t titolo, ot originale, y anno della prima puntata.
-const findStart = (m, fallbackTitle) => findMal([m?.ot, m?.t, fallbackTitle], m?.y, SERIESLIKE);
+const findStart = (m, fallbackTitle, key) => findMal([m?.ot, m?.t, fallbackTitle], m?.y, SERIESLIKE, key);
 const MOVIELIKE = new Set(['Movie', 'OVA', 'Special', 'TV Special', 'ONA']);
 
 // ---- titolo romaji degli anime (es. «Shingeki no Kyojin»), al posto dell'originale in giapponese ----
@@ -172,6 +179,8 @@ function saveRo(key, r) {
   LS.set('vds.mal.ro', all);
 }
 export function romajiOf(key) { return roCache()[key]?.r || ''; }
+// Romaji trovato altrove (titoli alternativi di TMDB): si salva solo se MyAnimeList non ne ha già dato uno.
+export function rememberRomaji(key, r) { if (r && !romajiOf(key)) saveRo(key, r); }
 const roTried = new Set();
 // Cerca il romaji di `key` se non c'è ancora; `done` ridisegna. Per le serie lo trova «Film e OVA»
 // (si legge dalla serie già trovata); per i film una ricerca su MyAnimeList.
@@ -185,8 +194,9 @@ export function ensureRomaji(key, { ot, t, y }, done) {
     if (n?.ro) { roTried.add(key); saveRo(key, n.ro); done(); }
     return; // altrimenti lo salva fetchFranchise
   }
+  if (jikanDown()) return; // il romaji arriva comunque dai titoli alternativi di TMDB (pagina del titolo)
   roTried.add(key);
-  findMal([ot, t], Number(y) || null, MOVIELIKE)
+  findMal([ot, t], Number(y) || null, MOVIELIKE, key)
     .then((n) => { saveRo(key, n?.ro || ''); done(); })
     .catch(() => {});
 }
@@ -194,10 +204,25 @@ export function ensureRomaji(key, { ot, t, y }, done) {
 // ---- ricerca in qualunque lingua (romaji, inglese, giapponese) ----
 // I primi anime che MyAnimeList trova per `q`, collegati a TMDB: [{ key, t, p, year, names }] nell'ordine
 // di MyAnimeList. Salva anche il loro romaji.
+// Se MyAnimeList non trova niente che somigli (un errore di battitura, «shingeki no kiojin»), si cerca
+// con le due parole più lunghe una per volta e si tengono i titoli simili a quello scritto (Dice ≥ 0,7).
 export async function searchMal(q) {
   if (jikanDown()) return null;
-  const d = await jikan(`/anime?q=${encodeURIComponent(q)}&limit=10`);
-  const hits = (d?.data || []).map(slim).filter((n) => !n.adult && (SERIESLIKE.has(n.type) || n.type === 'Movie')).slice(0, 4);
+  const ask = async (text) => {
+    const d = await jikan(`/anime?q=${encodeURIComponent(text)}&limit=10`, { prio: 0 });
+    return (d?.data || []).map(slim).filter((n) => !n.adult && (SERIESLIKE.has(n.type) || n.type === 'Movie'));
+  };
+  const close = (n) => titles(n).some((t) => sim(t, q) >= 0.7 || norm(t).includes(norm(q)));
+  let found = await ask(q);
+  if (!found.some(close)) {
+    const words = [...new Set(q.split(/\s+/).filter((w) => w.length >= 4))].sort((a, b) => b.length - a.length).slice(0, 2);
+    for (const w of words) {
+      if (w.toLowerCase() === q.trim().toLowerCase()) continue;
+      const more = (await ask(w)).filter(close);
+      if (more.length) { found = more; break; }
+    }
+  }
+  const hits = found.slice(0, 4);
   const out = await Promise.all(hits.map(async (n) => {
     try {
       const t = await mapToTmdb(n);
@@ -214,9 +239,11 @@ export async function searchMal(q) {
 // key, tt, tp }] } — id e pagina (u) di MyAnimeList, f tipo, l etichetta («Film», «OVA», «Serie»,
 // «Spin-off»…), d data, t titolo (inglese o romaji), c copertina, key/tt/tp titolo TMDB se trovato;
 // mal = id MyAnimeList delle parti che su TMDB sono questa stessa serie (per i filler).
-export async function fetchFranchise(key, m, fallbackTitle) {
+// onPartial(dati): mentre le voci arrivano (MyAnimeList ne dà meno di una al secondo) si mostra quello che
+// c'è già, ogni 2 secondi: film, OVA e speciali col collegamento a TMDB se è già noto.
+export async function fetchFranchise(key, m, fallbackTitle, onPartial) {
   const tvId = Number(key.split(':')[1]);
-  const found = await findStart(m, fallbackTitle);
+  const found = await findStart(m, fallbackTitle, key);
   if (!found) return { v: FR_VER, at: Date.now(), items: [], none: true };
   if (found.ro) saveRo(key, found.ro);
   const nodes = new Map();
@@ -227,9 +254,26 @@ export async function fetchFranchise(key, m, fallbackTitle) {
     if (nodes.has(id)) return nodes.get(id);
     if (nodes.size >= MAX_NODES) return null;
     nodes.set(id, null);
-    const n = await getNode(id).catch((e) => { if (id === found.id) throw e; return null; });
+    const n = await getNode(id, key).catch((e) => { if (id === found.id) throw e; return null; });
     nodes.set(id, n);
+    partial();
     return n;
+  };
+  // quello che c'è finora (solo film, OVA e speciali: le serie TV si decidono alla fine)
+  let lastPartial = 0;
+  const partial = (force) => {
+    if (!onPartial || (!force && Date.now() - lastPartial < 2000)) return;
+    lastPartial = Date.now();
+    const keys = new Set();
+    const items = [...rels.keys()].map((id) => nodes.get(id)).filter((n) => n && !n.adult && !same.has(n.id) && SHOW.has(n.type))
+      .map((n) => {
+        const t = knownMap(n.id);
+        const x = { id: n.id, f: n.type, d: n.date, t: n.en || n.ro || n.ja || '', c: n.img, u: n.url, l: FORMAT_LABEL[n.type] || n.type };
+        return t && t.key !== `tv:${tvId}` ? { ...x, key: t.key, tt: t.t, tp: t.p } : x;
+      })
+      .sort((a, b) => (a.d || '9999').localeCompare(b.d || '9999') || a.t.localeCompare(b.t))
+      .filter((x) => !x.key || (keys.has(x.key) ? false : keys.add(x.key)));
+    try { onPartial({ v: FR_VER, at: Date.now(), start: found.id, mal: [...same], items, partial: true }); } catch { /* niente */ }
   };
   // A ogni giro si scaricano le voci raggiunte da una relazione «di famiglia» e si allargano: il punto
   // di partenza, i film/OVA/speciali e le serie TV che su TMDB sono questa stessa serie (una stagione

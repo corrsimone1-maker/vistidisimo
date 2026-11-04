@@ -374,6 +374,7 @@ svg { width: 22px; height: 22px; flex: none; }
 .check-btn.on svg, .check-btn.done svg { opacity: 1; }
 .check-btn.small { width: 34px; height: 34px; }
 .check-btn.small svg { width: 17px; height: 17px; }
+.check-btn .x-n { font: 800 12.5px/1 var(--f-disp); letter-spacing: -.03em; }
 .day { padding: 0 var(--gut); margin-bottom: 18px; }
 .day-head { display: flex; align-items: baseline; gap: 8px; margin: 0 0 8px; font: 650 15px var(--f-disp); letter-spacing: -.02em; }
 .day-head span::first-letter { text-transform: uppercase; }
@@ -431,6 +432,9 @@ svg { width: 22px; height: 22px; flex: none; }
 .d-sec h2 { margin: 0 0 12px; font: 650 16px var(--f-disp); letter-spacing: -.02em; }
 .d-lists { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 12px; }
 .season { border-radius: 14px; background: var(--velluto); padding: 6px 10px 10px 14px; margin-bottom: 8px; }
+/* stagione finita: un velo lilla e un bordo appena visibile (scelta di Simo, 3/11/2026) */
+.season.done { background: linear-gradient(135deg, rgba(201, 179, 255, .085), rgba(201, 179, 255, .025)) var(--velluto); box-shadow: inset 0 0 0 1px rgba(201, 179, 255, .16); }
+.season.done .s-count { color: var(--lilla); }
 .season .tube { margin: 2px 4px 2px 0; height: 3px; }
 .season-row { display: flex; align-items: center; gap: 8px; }
 .season-head { flex: 1; display: flex; align-items: center; gap: 10px; min-height: 44px; text-align: left; min-width: 0; }

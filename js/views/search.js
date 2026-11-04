@@ -1,8 +1,8 @@
 import { html, icon, img, kindBadge, statusLabel, tube, posterCard } from '../ui.js';
-import { tm, tmdbToken, nonLatin } from '../tmdb.js';
+import { tm, tmdbToken, nonLatin, romajiFromTitles } from '../tmdb.js';
 import { item, metaOf, LS } from '../store.js';
 import { isAnimeResult, progress } from '../derive.js';
-import { searchMal, romajiOf, norm, sim } from '../mal.js';
+import { searchMal, romajiOf, rememberRomaji, norm, sim } from '../mal.js';
 import { stemText } from '../collection.js';
 import { emptyState } from './common.js';
 
@@ -37,7 +37,7 @@ function resultRow(r) {
   const anime = isAnimeResult(r);
   // titolo originale: per gli anime il romaji, se si conosce; mai in una scrittura che Simo non legge
   let orig = r.original_title || r.original_name || '';
-  if (anime) orig = romajiOf(key) || orig;
+  if (anime || nonLatin(orig)) orig = romajiOf(key) || orig;
   if (nonLatin(orig)) orig = '';
   const kind = type === 'tv' ? (anime ? 'Serie anime' : 'Serie') : (anime ? 'Film anime' : 'Film');
   const poster = it?.poster || r.poster_path;
@@ -103,7 +103,8 @@ async function loadTrending() {
 
 // Quanto uno dei titoli (italiano, inglese, originale, romaji…) corrisponde a quello che hai scritto:
 // uguale 1, comincia con quelle parole 0,85, le contiene 0,8, comincia o le contiene a metà parola
-// («Berlinoises» per «berlino») 0,6 / 0,55, se no la somiglianza × 0,5.
+// («Berlinoises» per «berlino») 0,6 / 0,55, quasi uguale (somiglianza ≥ 0,8: un errore di battitura)
+// 0,8–0,85, se no la somiglianza × 0,5.
 export function textScore(names, q) {
   const qw = stemText(q);
   if (!qw) return 0;
@@ -118,7 +119,11 @@ export function textScore(names, q) {
     else if ((' ' + x + ' ').includes(' ' + qw + ' ')) s = 0.8;
     else if (x.startsWith(qw)) s = 0.6;
     else if (x.includes(qw)) s = 0.55;
-    else s = 0.5 * sim(n, q);
+    else {
+      // quasi uguale (un errore di battitura: «shingeki no kiojin»): conta quasi come se lo contenesse
+      const d = sim(n, q);
+      s = d >= 0.8 ? 0.6 + 0.25 * d : 0.5 * d;
+    }
     if (s > best) best = s;
   }
   return best;
@@ -134,9 +139,59 @@ export function rankScore(r, q, names, pos = 0, n = 1) {
 }
 const namesOf = (r) => { const key = keyOf(r); return [r.title || r.name, st.en.get(key)?.title, r.original_title || r.original_name, romajiOf(key), ...(st.aka.get(key) || [])]; };
 
-// Gli anime trovati su MyAnimeList per la stessa ricerca (al massimo 2,5 secondi di attesa): così
-// «Shingeki no Kyojin» o «Attack on Titan» trovano la serie anche se TMDB non la mette in cima.
+// I risultati di TMDB si mostrano appena arrivano (prima si aspettava anche MyAnimeList fino a 2,5 s, e
+// Cerca sembrava lento). Gli anime trovati su MyAnimeList (romaji, inglese, giapponese, anche con un
+// errore di battitura) si aggiungono quando arrivano, se è passato poco e non hai ancora fatto scorrere
+// la pagina; dopo portano solo i romaji, così l'ordine non cambia sotto le dita. Se TMDB non ha trovato
+// niente (es. «shingeki no kiojin») si aspetta MyAnimeList fino a 6 secondi invece di dire «Nessun risultato».
 const withTimeout = (p, ms) => Promise.race([p, new Promise((r) => setTimeout(() => r(null), ms))]);
+const LATE_MERGE_MS = 3000;
+
+// Titoli alternativi di TMDB (romaji, inglese, altre lingue in lettere latine), per la sessione. Servono
+// quando TMDB trova un titolo con un nome che non mostra (cerchi «shingeki no kyojin» e TMDB dà «L'attacco
+// dei giganti»): così l'ordine sa che corrisponde.
+const altMem = new Map(); // key -> [titoli]
+async function altTitles(list) {
+  await Promise.all(list.filter((r) => !altMem.has(keyOf(r))).map(async (r) => {
+    const k = keyOf(r);
+    altMem.set(k, []);
+    try {
+      const d = await tm(`/${r.media_type}/${r.id}/alternative_titles`, { language: null });
+      const names = (d?.results || d?.titles || []).map((x) => x?.title).filter((t) => t && !nonLatin(t));
+      // originale in una scrittura che Simo non legge: il romaji va anche sotto il titolo
+      if (nonLatin(r.original_title || r.original_name)) rememberRomaji(k, romajiFromTitles({ alternative_titles: d }, { loose: isAnimeResult(r) }));
+      altMem.set(k, [...new Set(names)].slice(0, 30));
+    } catch { altMem.delete(k); }
+  }));
+  for (const r of list) { const a = altMem.get(keyOf(r)); if (a?.length) st.aka.set(keyOf(r), [...new Set([...(st.aka.get(keyOf(r)) || []), ...a])]); }
+}
+const byPop = (a, b) => (b.popularity || 0) - (a.popularity || 0);
+const strong = (r, q) => textScore(namesOf(r), q) >= 0.75;
+
+// Quando niente di quello che ha dato TMDB somiglia a quello che hai scritto:
+// 1. si guardano i titoli alternativi dei 6 risultati più conosciuti (il romaji di solito sta lì);
+// 2. se ancora niente e hai scritto almeno 6 lettere (un errore di battitura: «shingeki no kiojin»,
+//    «l'attaco dei giganti»), si cerca di nuovo con le due parole più lunghe, una per volta, e si tengono
+//    i titoli quasi uguali a quello scritto (anche tra i loro titoli alternativi).
+// Restituisce i risultati da aggiungere.
+async function rescue(q, base, seen) {
+  if (base.length) {
+    await altTitles([...base].sort(byPop).slice(0, 6));
+    if (base.some((r) => strong(r, q))) return [];
+  }
+  if (q.replace(/\s/g, '').length < 6) return [];
+  const words = [...new Set(q.split(/\s+/).filter((w) => w.length >= 4 && w.toLowerCase() !== q.toLowerCase()))].sort((a, b) => b.length - a.length).slice(0, 2);
+  for (const w of words) {
+    const d = await tm('/search/multi', { query: w, include_adult: 'false' }).catch(() => null);
+    const found = (d?.results || []).filter(keep).filter((r) => !seen.has(keyOf(r)));
+    if (!found.length) continue;
+    const top = found.sort(byPop).slice(0, 8);
+    await altTitles(top.filter((r) => !strong(r, q)).slice(0, 6));
+    const good = top.filter((r) => strong(r, q));
+    if (good.length) { good.forEach((r) => seen.add(keyOf(r))); return good; }
+  }
+  return [];
+}
 
 async function runSearch() {
   const q = st.q.trim();
@@ -146,27 +201,49 @@ async function runSearch() {
   paint();
   try {
     const ask = (page, language) => tm('/search/multi', { query: q, include_adult: 'false', page, language });
-    const malP = q.length >= 3 ? searchMal(q).catch(() => null) : Promise.resolve(null);
-    const [p1, p2, e1, e2, mal] = await Promise.all([ask(1), ask(2), ask(1, 'en-US').catch(() => null), ask(2, 'en-US').catch(() => null), withTimeout(malP, 2500)]);
+    let malDone = false;
+    const malP = (q.length >= 3 ? searchMal(q).catch(() => null) : Promise.resolve(null)).then((m) => { malDone = true; return m; });
+    const [p1, p2, e1, e2] = await Promise.all([ask(1), ask(2), ask(1, 'en-US').catch(() => null), ask(2, 'en-US').catch(() => null)]);
     if (seq !== st.seq) return;
     rememberEnglish([...(e1?.results || []), ...(e2?.results || [])]);
     const seen = new Set();
-    const list = [...(p1?.results || []), ...(p2?.results || []), ...(e1?.results || [])].filter(keep).filter((r) => { const k = keyOf(r); if (seen.has(k)) return false; seen.add(k); return true; });
-    const nTmdb = list.length; // i risultati di MyAnimeList aggiunti dopo non hanno una posizione TMDB
-    for (const h of mal || []) {
-      st.aka.set(h.key, h.names);
-      if (seen.has(h.key)) continue;
-      // un anime che TMDB non ha dato: si aggiunge solo se il titolo corrisponde davvero
-      const [type, id] = h.key.split(':');
-      // popolarità di un titolo medio: TMDB non l'ha data, ma MyAnimeList l'ha trovato
-      const r = { id: Number(id), media_type: type, poster_path: h.p, genre_ids: [16], original_language: 'ja', origin_country: ['JP'], popularity: 20 };
-      if (type === 'movie') Object.assign(r, { title: h.t, release_date: h.year ? `${h.year}` : '' });
-      else Object.assign(r, { name: h.t, first_air_date: h.year ? `${h.year}` : '' });
-      if (textScore(namesOf(r), q) >= 0.75) { seen.add(h.key); list.push(r); }
+    const base = [...(p1?.results || []), ...(p2?.results || []), ...(e1?.results || [])].filter(keep).filter((r) => { const k = keyOf(r); if (seen.has(k)) return false; seen.add(k); return true; });
+    if (!base.some((r) => strong(r, q))) {
+      base.push(...await rescue(q, base, seen));
+      if (seq !== st.seq) return;
     }
-    st.results = list.map((r, i) => ({ r, i, s: rankScore(r, q, namesOf(r), Math.min(i, nTmdb), nTmdb) })).sort((a, b) => b.s - a.s || a.i - b.i).map((x) => x.r);
-    // se MyAnimeList arriva dopo, porta solo i romaji (l'ordine non cambia sotto le dita)
-    if (!mal) malP.then((m) => { if (m && seq === st.seq) paint(); });
+    const nTmdb = base.length; // i risultati di MyAnimeList aggiunti dopo non hanno una posizione TMDB
+    const merge = (mal) => {
+      const list = [...base];
+      const have = new Set(seen);
+      for (const h of mal || []) {
+        st.aka.set(h.key, h.names);
+        if (have.has(h.key)) continue;
+        // un anime che TMDB non ha dato: si aggiunge solo se il titolo corrisponde davvero
+        const [type, id] = h.key.split(':');
+        // popolarità di un titolo medio: TMDB non l'ha data, ma MyAnimeList l'ha trovato
+        const r = { id: Number(id), media_type: type, poster_path: h.p, genre_ids: [16], original_language: 'ja', origin_country: ['JP'], popularity: 20 };
+        if (type === 'movie') Object.assign(r, { title: h.t, release_date: h.year ? `${h.year}` : '' });
+        else Object.assign(r, { name: h.t, first_air_date: h.year ? `${h.year}` : '' });
+        if (textScore(namesOf(r), q) >= 0.75) { have.add(h.key); list.push(r); }
+      }
+      return list.map((r, i) => ({ r, i, s: rankScore(r, q, namesOf(r), Math.min(i, nTmdb), nTmdb) })).sort((a, b) => b.s - a.s || a.i - b.i).map((x) => x.r);
+    };
+    // MyAnimeList ha già risposto? (una microattesa basta a saperlo)
+    let mal = await withTimeout(malP, 0);
+    if (!malDone && !base.length) mal = await withTimeout(malP, 6000);
+    if (seq !== st.seq) return;
+    st.results = merge(mal);
+    paint();
+    if (!malDone) {
+      const shownAt = Date.now();
+      malP.then((m) => {
+        if (!m || seq !== st.seq) return;
+        if (Date.now() - shownAt < LATE_MERGE_MS && window.scrollY < 60) st.results = merge(m);
+        paint();
+      });
+    }
+    return;
   } catch (e) { if (seq === st.seq) st.error = e.message; }
   if (seq === st.seq) paint();
 }

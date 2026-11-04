@@ -113,7 +113,8 @@ const OUT = process.argv[2] || require('os').tmpdir();
   await page.click('#tabs a[data-tab=home]');
   await page.waitForSelector('.wordmark');
   await page.waitForTimeout(300);
-  await page.evaluate(() => document.querySelector('a.pc[href="#/t/tv/73223"]').click());
+  // (la locandina in Home se c'è; con i dati del 4/11/2026 Black Clover non è più tra le ultime serie: stesso link)
+  await page.evaluate(() => { const a = document.querySelector('a.pc[href="#/t/tv/73223"]'); if (a) a.click(); else location.hash = '#/t/tv/73223'; });
   await page.waitForSelector('.d-head');
   await page.waitForTimeout(400);
   const y2 = await page.evaluate(() => window.scrollY);

@@ -17,6 +17,7 @@ import { fetchFranchise, cachedFranchise, saveFranchise, FORMAT_LABEL } from '..
 import { fetchWiki, cachedWiki } from '../wikidata.js';
 import { fetchByTitle, cachedByTitle, miniOf, ensureMini, rememberResult, manualOf } from '../collection.js';
 import { checkFiller } from '../filler.js';
+import { focusJikan, jikanDown } from '../jikan.js';
 import { getSaga } from './saga.js';
 import { cardFor, emptyState, titleOf } from './common.js';
 import { rankScore } from './search.js';
@@ -46,16 +47,19 @@ function stateOf(key, x) {
   if (!s.mal && key.startsWith('tv:') && x.anime) {
     const c = cachedFranchise(key);
     s.mal = { data: c, loading: false, err: '' };
-    if (!c || c.stale) {
+    // MyAnimeList spento o che non risponde: si usa solo quello che è già sul telefono
+    if ((!c || c.stale) && !jikanDown()) {
       s.mal.loading = true;
-      fetchFranchise(key, metaOf(key) || { t: x.t, ot: x.ot, y: x.y }, x.t)
+      // mentre arriva si mostra quello che c'è (MyAnimeList dà meno di una voce al secondo)
+      const onPartial = (d) => { if (s.mal.loading && (!s.mal.data || s.mal.data.partial)) { s.mal.data = d; done(); } };
+      fetchFranchise(key, metaOf(key) || { t: x.t, ot: x.ot, y: x.y }, x.t, onPartial)
         .then((d) => { saveFranchise(key, d); s.mal.data = d; s.mal.err = ''; })
         .catch((e) => { s.mal.err = e.message; })
         .finally(() => { s.mal.loading = false; done(); });
     }
   }
-  // gli id MyAnimeList della serie servono anche a sapere se ci sono filler
-  if (s.mal?.data?.mal?.length) checkFiller(key, s.mal.data.mal, done);
+  // gli id MyAnimeList della serie servono anche a sapere se ci sono filler (solo a elenco finito)
+  if (s.mal?.data?.mal?.length && !s.mal.data.partial) checkFiller(key, s.mal.data.mal, done);
   return s;
 }
 
@@ -136,6 +140,7 @@ function card(e, t) {
 export function collectionSection(key, x, rerender) {
   repaint = rerender;
   known.set(key, x);
+  focusJikan(key); // le richieste a MyAnimeList di questo titolo passano prima
   const { list } = build(key, x);
   if (list.length < 2) return '';
   const [type, id] = key.split(':');
@@ -178,6 +183,7 @@ function knownOf(key) {
 export function renderCollezione(type, id, rerender) {
   repaint = rerender;
   const key = `${type}:${id}`;
+  focusJikan(key);
   const x = knownOf(key);
   const editable = !!item(key);
   const head = html`<header class="page-top">

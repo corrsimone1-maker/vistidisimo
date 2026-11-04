@@ -164,7 +164,8 @@ const DARK = 70523; // Dark: rivista 3 volte, ogni episodio visto 4 volte
   check('«Vai all’ultimo visto» porta all’ultimo episodio', await page.$eval('.rp-card:last-child', (e) => { const r = e.getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight / 2; }));
   await shot('e08-ripasso-fondo');
 
-  // 7. rivisione di tutta la serie (Dark): − e + aggiornano anche gli episodi
+  // 7. rivisione di tutta la serie (Dark): − e + aggiornano anche gli episodi; stagioni e serie collegate
+  //    (scelta di Simo, 3/11/2026): ogni stagione «×N» ↔ serie «×N»
   await page.goto(base + `#/t/tv/${DARK}`);
   await page.waitForSelector('.rw-chip');
   await page.waitForTimeout(800);
@@ -172,6 +173,10 @@ const DARK = 70523; // Dark: rivista 3 volte, ogni episodio visto 4 volte
   await shot('e09-dark');
   const ep11 = () => remote()[`tv:${DARK}`].rw['1']['1'];
   const before = { t: remote()[`tv:${DARK}`].rewatch, e: ep11() };
+  const circle = (n) => text(`[data-act=d-season-all][data-s="${n}"]`);
+  const nSeasons = await page.$$eval('[data-act=d-season-all]', (bs) => bs.map((b) => b.dataset.s).filter((x) => x !== '0').length);
+  check(`bottone della serie «${await text('.rw-chip')}» e stagioni «${await circle(1)}» con lo stesso numero`, (await text('.rw-chip')) === `×${before.t + 1}` && (await circle(1)) === `×${before.t + 1}`);
+  check('stagioni finite con il rettangolo diverso', await page.$$eval('.season', (ss) => ss.every((x) => x.classList.contains('done'))));
   await page.click('[data-act=d-rw]');
   await page.waitForSelector('.rw-sheet [data-rw="-1"]');
   console.log('    foglio:', await text('.rw-sheet'));
@@ -192,6 +197,7 @@ const DARK = 70523; // Dark: rivista 3 volte, ogni episodio visto 4 volte
   await page.click('.sheet [data-o=rw]');
   await page.waitForTimeout(2600);
   check('stagione rivista: +1 a S1E1', ep11() === before.e + 1);
+  check(`la stagione 1 diventa «${await circle(1)}», la serie resta «${await text('.rw-chip')}» (le altre stagioni no)`, (await circle(1)) === `×${before.t + 2}` && (await text('.rw-chip')) === `×${before.t + 1}` && remote()[`tv:${DARK}`].rewatch === before.t);
   await page.click('.toast button');
   await page.waitForTimeout(2600);
   check('«Annulla» la toglie', ep11() === before.e);
@@ -205,6 +211,23 @@ const DARK = 70523; // Dark: rivista 3 volte, ogni episodio visto 4 volte
   await page.click('.sheet [data-o=rw]');
   await page.waitForTimeout(2600);
   check('e di nuovo com’era', ep11() === before.e);
+  // tutte le stagioni riviste una per una → la serie passa a una visione in più
+  for (let n = 1; n <= nSeasons; n++) {
+    await page.click(`[data-act=d-season-all][data-s="${n}"]`);
+    await page.waitForSelector('.sheet [data-o=rw]');
+    await page.click('.sheet [data-o=rw]');
+    await page.waitForSelector('.sheet-wrap', { state: 'detached' });
+  }
+  await page.waitForTimeout(2600);
+  check(`tutte le ${nSeasons} stagioni riviste → serie «${await text('.rw-chip')}», su GitHub rewatch ${remote()[`tv:${DARK}`].rewatch}`, (await text('.rw-chip')) === `×${before.t + 2}` && remote()[`tv:${DARK}`].rewatch === before.t + 1);
+  await shot('e09d-dark-tutte-rivista');
+  // e il − della serie le riporta tutte indietro
+  await page.click('[data-act=d-rw]');
+  await page.waitForSelector('.rw-sheet [data-rw="-1"]');
+  await page.click('.rw-sheet [data-rw="-1"]');
+  await page.click('.rw-sheet [data-close]');
+  await page.waitForTimeout(2600);
+  check(`− della serie: stagioni «${await circle(1)}», serie «${await text('.rw-chip')}»`, (await circle(1)) === `×${before.t + 1}` && (await text('.rw-chip')) === `×${before.t + 1}` && ep11() === before.e && remote()[`tv:${DARK}`].rewatch === before.t);
   // cerchio di un episodio nella lista: stesso foglio
   await page.click(`[data-act=d-season][data-s="1"]`);
   await page.waitForSelector('[data-act=d-ep][data-s="1"][data-e="3"]');
@@ -223,7 +246,7 @@ const DARK = 70523; // Dark: rivista 3 volte, ogni episodio visto 4 volte
   await page.click('.rw-sheet [data-rw="1"]');
   await page.waitForTimeout(2600);
   check(`film +1 (${r0} → ${remote()['movie:4935'].rewatch})`, remote()['movie:4935'].rewatch === r0 + 1);
-  check('il numero si aggiorna nel foglio e sul bottone', (await text('.rw-step-n')) === String(r0 + 1) && (await text('.rw-chip')) === String(r0 + 1));
+  check(`il numero (volte viste) si aggiorna nel foglio e sul bottone: ${await text('.rw-step-n')} · ${await text('.rw-chip')}`, (await text('.rw-step-n')) === String(r0 + 2) && (await text('.rw-chip')) === `×${r0 + 2}`);
   await page.click('.rw-sheet [data-rw="-1"]');
   await page.click('.rw-sheet [data-close]');
   await page.waitForTimeout(2600);

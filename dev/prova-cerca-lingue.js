@@ -3,7 +3,10 @@
 // - «shingeki no kyojin»: TMDB non trova niente, MyAnimeList sì → la serie compare, col romaji sotto;
 // - una ricerca qualsiasi non si riempie di anime che non c'entrano;
 // - titolo originale: per gli anime niente giapponese, il romaji (serie da «Film e OVA», film da una ricerca);
-// - nella pagina della serie non c'è più «Il prossimo da vedere».
+// - nella pagina della serie non c'è più «Il prossimo da vedere»;
+// - (3/11/2026, sera) errore di battitura nel romaji («shingeki no kiojin») trovato lo stesso; i risultati di
+//   TMDB si vedono subito anche se MyAnimeList è lento; romaji dai titoli alternativi di TMDB (Madoka, che
+//   MyAnimeList finto non conosce); tasto Cerca toccato di nuovo → casella vuota e tastiera; Home → in cima.
 const { chromium } = require('playwright');
 const { spawn } = require('child_process');
 const path = require('path');
@@ -33,6 +36,7 @@ const malAnime = (id) => { const a = MAL[id]; return { mal_id: Number(id), url: 
   await new Promise((r) => setTimeout(r, 800));
   const M = makeMocks(LIB, {});
   const log = { mal: [] };
+  let slowMal = 0; // ritardo delle risposte di MyAnimeList (ms)
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 393, height: 852 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'it-IT' });
   const ok = (route, body) => route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) });
@@ -53,12 +57,17 @@ const malAnime = (id) => { const a = MAL[id]; return { mal_id: Number(id), url: 
     }
     if (p === '/search/tv') return ok(route, { results: q.includes('進撃の巨人') ? [{ ...AOT }] : [] });
     if (p === '/search/movie') return ok(route, { results: q.includes('前編') ? [{ ...FILMS[1] }] : [] });
+    if (p === '/tv/39218') {
+      // Madoka: originale in giapponese, romaji solo nei titoli alternativi di TMDB
+      return M.tmdb({ request: () => route.request(), fulfill: async (o) => { const b = JSON.parse(o.body || '{}'); Object.assign(b, { name: 'Puella Magi Madoka Magica', original_name: '魔法少女まどか☆マギカ', genres: [{ id: 16, name: 'Animazione' }], original_language: 'ja', origin_country: ['JP'] }); if ((u.searchParams.get('append_to_response') || '').includes('alternative_titles')) b.alternative_titles = { results: [{ iso_3166_1: 'US', title: 'Puella Magi Madoka Magica', type: '' }, { iso_3166_1: 'JP', title: 'Mahou Shoujo Madoka★Magica', type: 'Romaji' }] }; return route.fulfill({ ...o, status: 200, body: JSON.stringify(b) }); } });
+    }
     if (p === '/tv/1429') return M.tmdb({ request: () => ({ url: () => route.request().url().replace('/tv/1429', '/tv/1429') }), fulfill: async (o) => { const b = JSON.parse(o.body || '{}'); Object.assign(b, { id: 1429, name: "L'attacco dei giganti", original_name: '進撃の巨人', genres: [{ id: 16, name: 'Animazione' }], original_language: 'ja', origin_country: ['JP'] }); return route.fulfill({ ...o, status: 200, body: JSON.stringify(b) }); } });
     if (p === '/movie/1235') return ok(route, { id: 1235, title: "L'attacco dei giganti - Il film - Parte 1", original_title: '劇場版 進撃の巨人 前編', release_date: '2014-11-22', genres: [{ id: 16, name: 'Animazione' }], original_language: 'ja', origin_country: ['JP'], overview: 'Trama.', runtime: 119, credits: { crew: [] }, poster_path: '/p_movie_1235.jpg' });
     return M.tmdb(route);
   });
-  await ctx.route('https://api.jikan.moe/**', (route) => {
+  await ctx.route('https://api.jikan.moe/**', async (route) => {
     const u = new URL(route.request().url());
+    if (slowMal) await new Promise((r) => setTimeout(r, slowMal));
     log.mal.push(u.pathname + u.search);
     if (u.pathname === '/v4/anime') {
       const q = (u.searchParams.get('q') || '').toLowerCase();
@@ -70,7 +79,8 @@ const malAnime = (id) => { const a = MAL[id]; return { mal_id: Number(id), url: 
     if (/\/episodes$/.test(u.pathname)) return ok(route, { pagination: { has_next_page: false }, data: [] });
     return route.fulfill({ status: 404, headers: { 'access-control-allow-origin': '*' }, body: '{}' });
   });
-  await ctx.addInitScript(() => { if (!localStorage.getItem('vds.ghToken')) { localStorage.setItem('vds.ghToken', 'x'); localStorage.setItem('vds.tmdbToken', 'y'); } });
+  // Jikan è spento nell'app (API pubblica chiusa il 1/10/2026): qui si riaccende per provare il codice con un Jikan finto
+  await ctx.addInitScript(() => { localStorage.setItem('vds.jikanOn', '1'); if (!localStorage.getItem('vds.ghToken')) { localStorage.setItem('vds.ghToken', 'x'); localStorage.setItem('vds.tmdbToken', 'y'); } });
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
@@ -126,6 +136,71 @@ const malAnime = (id) => { const a = MAL[id]; return { mal_id: Number(id), url: 
   const orig2 = await page.$eval('.d-orig', (e) => e.textContent).catch(() => '(manca)');
   check(`titolo originale del film: ${orig2}`, orig2 === 'Shingeki no Kyojin Movie 1: Guren no Yumiya');
   check('mai il giapponese come titolo originale', !/[぀-ヿ一-鿿]/.test(orig2));
+
+  // 7. errore di battitura nel romaji: MyAnimeList non trova «shingeki no kiojin», si riprova con «shingeki»
+  await page.goto(base + '#/cerca');
+  await page.waitForSelector('[data-input=search-q]');
+  log.mal = [];
+  await search('shingeki no kiojin');
+  r = await rows();
+  console.log('   ', r.map((x) => x.join(' / ')).join(' | '), '·', log.mal.join(' '));
+  check('«shingeki no kiojin» (sbagliato) trova la serie', r[0]?.[0] === '#/t/tv/1429' && log.mal.some((x) => x.includes('q=shingeki&')));
+  await page.screenshot({ path: path.join(OUT, 'cl5-errore.png') });
+
+  // 8. MyAnimeList lento: i risultati di TMDB si vedono subito (prima si aspettava fino a 2,5 s)
+  slowMal = 4000;
+  await page.fill('[data-input=search-q]', '');
+  await page.waitForTimeout(200);
+  const t0 = Date.now();
+  await page.fill('[data-input=search-q]', 'breaking');
+  await page.waitForFunction(() => [...document.querySelectorAll('.sr .sr-title')].map((e) => e.textContent).join('|') === 'Breaking Bad', null, { timeout: 8000, polling: 20 });
+  const dt = Date.now() - t0;
+  check(`risultati di TMDB dopo ${dt} ms (con 350 ms di attesa dopo l'ultimo tasto) senza aspettare MyAnimeList (lento 4 s)`, dt < 1500);
+  slowMal = 0;
+  await page.waitForTimeout(4500);
+  check('e quando MyAnimeList arriva tardi l’elenco resta com’era', (await rows()).length === 1);
+
+  // 9. tasto Cerca toccato di nuovo: casella vuota e pronta per scrivere; Home toccata di nuovo: in cima
+  await page.click('#tabs a[data-tab=cerca]');
+  await page.waitForTimeout(300);
+  check('Cerca di nuovo: casella svuotata e attiva', await page.evaluate(() => { const b = document.querySelector('[data-input=search-q]'); return b.value === '' && document.activeElement === b; }));
+  check('…e torna «Di tendenza»', (await page.$eval('#search-results', (e) => e.textContent)).includes('Di tendenza'));
+  await page.evaluate(() => document.activeElement.blur());
+  await page.click('#tabs a[data-tab=cerca]');
+  await page.waitForTimeout(200);
+  check('anche vuota: si attiva per scrivere', await page.evaluate(() => document.activeElement === document.querySelector('[data-input=search-q]')));
+  await page.click('#tabs a[data-tab=home]');
+  await page.waitForSelector('#view .pc');
+  check('dagli altri tasti si cambia schermata come prima', (await page.evaluate(() => location.hash)) === '#/home');
+  await page.evaluate(() => window.scrollTo(0, 1500));
+  await page.waitForTimeout(200);
+  await page.click('#tabs a[data-tab=home]');
+  await page.waitForTimeout(1200);
+  check(`Home di nuovo: in cima (scroll ${await page.evaluate(() => window.scrollY)})`, (await page.evaluate(() => window.scrollY)) === 0);
+
+  // 10. romaji dai titoli alternativi di TMDB (MyAnimeList non conosce Madoka)
+  await page.goto(base + '#/t/tv/39218');
+  await page.waitForSelector('.d-head h1');
+  await page.waitForFunction(() => !!document.querySelector('.d-orig'), null, { timeout: 8000 }).catch(() => {});
+  const orig3 = await page.$eval('.d-orig', (e) => e.textContent).catch(() => '(manca)');
+  check(`romaji da TMDB: ${orig3}`, orig3 === 'Mahou Shoujo Madoka★Magica');
+  await page.screenshot({ path: path.join(OUT, 'cl6-madoka.png') });
+
+  // 11. fila di Jikan: prima la ricerca, poi il titolo aperto, poi il resto (in ordine di arrivo)
+  log.mal = [];
+  await page.evaluate(async () => {
+    const J = await import('./js/jikan.js');
+    J.focusJikan('tv:2');
+    const ps = [];
+    for (let i = 0; i < 4; i++) ps.push(J.jikan(`/anime/${900 + i}/full`, { key: 'tv:1' }).catch(() => null));
+    for (let i = 0; i < 2; i++) ps.push(J.jikan(`/anime/${950 + i}/full`, { key: 'tv:2' }).catch(() => null));
+    ps.push(J.jikan('/anime?q=ordine&limit=10', { prio: 0 }).catch(() => null));
+    await Promise.all(ps);
+  });
+  // solo le richieste di questa prova (in sottofondo può partirne qualcun'altra per la pagina aperta prima)
+  const order = log.mal.filter((x) => x.includes('ordine') || /anime\/9\d\d\/full/.test(x)).map((x) => (x.includes('ordine') ? 'cerca' : x.match(/anime\/(\d+)/)[1]));
+  console.log('    ordine:', order.join(' '));
+  check('la ricerca passa davanti, poi il titolo aperto, poi gli altri', order.indexOf('cerca') <= 1 && order.indexOf('951') < order.indexOf('901') && order.slice(-3).join() === '901,902,903');
 
   // 6. One Piece (dati veri): niente «Il prossimo da vedere» nella tabella
   await page.goto(base + '#/t/tv/37854');
