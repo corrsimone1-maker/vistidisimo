@@ -1,4 +1,5 @@
 // Pezzi della «Collezione» di un titolo (la sezione è in js/views/collezione.js):
+// - titoli con gli stessi personaggi fatti dagli stessi attori (spin-off, seguiti, film di una serie);
 // - titoli che cominciano allo stesso modo («Vis a vis» → «Vis a vis: El oasis», «Narcos» → «Narcos:
 //   Messico»), cercati su TMDB;
 // - titolo, locandina e data dei titoli collegati che non sono in libreria (da TMDB);
@@ -70,6 +71,107 @@ export async function fetchByTitle(key, names, lang) {
   const ks = Object.keys(all);
   if (ks.length > 400) ks.sort((a, b) => all[a].at - all[b].at).slice(0, ks.length - 400).forEach((x) => delete all[x]);
   LS.set('vds.col.tt', all);
+  return keys;
+}
+
+// ---------- stessi personaggi (spin-off, seguiti, film di una serie) ----------
+// Uno spin-off o un seguito ha gli stessi personaggi fatti dagli stessi attori (Pedro Alonso è Berlino nella
+// Casa di carta, in Berlino e in Berlino e la dama con l'ermellino; Junko Takeuchi è la voce di Naruto
+// Uzumaki in Naruto, Shippuden, Boruto e nei film). Due serie diverse degli stessi autori invece no: Alba
+// Flores è Saray in Vis a vis e Nairobi nella Casa di carta. Dati di TMDB (cast con i nomi dei personaggi),
+// cercati dal vivo: si prendono gli attori principali del titolo, i loro altri ruoli, e si tengono i titoli
+// dove fanno **lo stesso personaggio**. Funziona per film, serie e anime, senza altre fonti.
+// Risultato sul telefono `vds.col.cast` per 7 giorni; i ruoli degli attori solo in memoria (sono tanti).
+const CAST_TTL = 7 * DAY;
+const MAIN_CAST = 8;
+// parole che non dicono chi è il personaggio («Self», «Narrator», «Young Mike»…)
+const GENERIC = new Set(('self himself herself themselves yourself narrator narratore narrador voice voices voce additional host '
+  + 'guest various uncredited archive footage young younger older old little man woman men women boy girl kid kids child children baby '
+  + 'police officer doctor dottore nurse student students teacher mother father mom dad brother sister son daughter wife husband '
+  + 'king queen prince princess soldier guard cameo presenter judge contestant reporter announcer unknown the and his her mrs miss '
+  + 'stesso stessa mismo misma lui lei ella professor profesor professore detective agent agente captain capitano lieutenant sergeant '
+  + 'general president doctor customer waiter waitress driver friend friends neighbor neighbour villager citizen people crowd extra '
+  + 'singer dancer member members student guest_star episode episodes adult teen teenager boss chief inspector ispettore commissario').split(/\s+/));
+// nomi propri troppo comuni per bastare da soli («Michael» in due serie diverse)
+const COMMON = new Set(('john james michael david robert william richard thomas mark paul peter george jack daniel joseph charles '
+  + 'mary anna maria sarah laura julia emma lisa jennifer jessica elizabeth susan karen nancy linda carlos juan jose luis antonio '
+  + 'marco luca giuseppe francesco giovanni alessandro andrea sofia chiara elena martina giulia kevin ryan chris nick mike alex '
+  + 'sam ben tom max steve tony frank henry harry eric adam jake luke matt josh anne kate jane alice lucy sara pablo javier miguel '
+  + 'manuel pedro diego jorge alberto roberto mario paolo stefano matteo lorenzo').split(/\s+/));
+const noise = /\((?:voice|uncredited|archive footage|credit only|singing voice|english version|japanese version|young|adult|child)[^)]*\)/gi;
+// Le varianti di un personaggio («Andrés de Fonollosa / Berlín» → due varianti), ognuna come insieme di parole.
+export function charNames(s) {
+  return (s || '').replace(noise, ' ').split(/\s*(?:\/|;|\||\baka\b)\s*/i)
+    .map((alt) => new Set(stemText(alt).split(' ').filter((w) => w.length >= 3 && !GENERIC.has(w))))
+    .filter((set) => set.size > 0);
+}
+// Stesso personaggio: stesse parole, oppure almeno due parole in comune, oppure un nome solo (soprannome)
+// che compare nell'altro e non è un nome proprio comunissimo.
+export function sameCharacter(a, b) {
+  for (const A of charNames(a)) {
+    for (const B of charNames(b)) {
+      const shared = [...A].filter((w) => B.has(w));
+      if (!shared.length) continue;
+      if (shared.length >= 2 || (shared.length === A.size && shared.length === B.size && !(A.size === 1 && COMMON.has(shared[0])))) return true;
+      if ((A.size === 1 || B.size === 1) && shared[0].length >= 4 && !COMMON.has(shared[0])) return true;
+    }
+  }
+  return false;
+}
+let castMem = null;
+const castCache = () => (castMem ||= LS.get('vds.col.cast', {}) || {});
+export function cachedByCast(key) {
+  const c = castCache()[key];
+  return c ? { k: c.k || [], stale: Date.now() - (c.at || 0) > CAST_TTL } : null;
+}
+const people = new Map(); // id attore -> Promise dei suoi ruoli (per la sessione)
+const rolesOf = (pid) => {
+  if (!people.has(pid)) people.set(pid, tm(`/person/${pid}/combined_credits`).then((d) => d?.cast || []).catch(() => { people.delete(pid); return []; }));
+  return people.get(pid);
+};
+// Gli attori principali di un titolo: [{ id, ch, top }] (top = tra i primi 3)
+async function mainCast(type, id) {
+  if (type === 'tv') {
+    const d = await tm(`/tv/${id}/aggregate_credits`);
+    const cast = (d?.cast || []).map((c) => ({ id: c.id, ch: (c.roles || []).map((r) => r.character).filter(Boolean).join(' / '), n: c.total_episode_count || 0 }))
+      .filter((c) => charNames(c.ch).length)
+      .sort((a, b) => b.n - a.n);
+    return cast.slice(0, MAIN_CAST).map((c, i) => ({ id: c.id, ch: c.ch, top: i < 3 }));
+  }
+  const d = await tm(`/movie/${id}/credits`);
+  const cast = (d?.cast || []).filter((c) => charNames(c.character).length).sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
+  return cast.slice(0, MAIN_CAST).map((c, i) => ({ id: c.id, ch: c.character, top: i < 3 }));
+}
+// I titoli dove gli attori principali di `key` fanno lo stesso personaggio: array di chiavi, dal più
+// legato (più attori in comune) al meno. Si scartano le comparsate (1 episodio) e i programmi che non
+// sono opere (talk show, documentari…).
+export async function fetchByCast(key) {
+  const [type, id] = key.split(':');
+  const cast = await mainCast(type, Number(id));
+  const found = new Map(); // chiave -> { r, score }
+  await Promise.all(cast.map(async (c) => {
+    for (const r of await rolesOf(c.id)) {
+      if (r.media_type !== 'movie' && r.media_type !== 'tv') continue;
+      const k = `${r.media_type}:${r.id}`;
+      if (k === key || (r.genre_ids || []).some((g) => NOT_WORKS.has(g))) continue;
+      if (r.media_type === 'tv' && (r.episode_count || 0) < 2) continue;
+      if (!sameCharacter(c.ch, r.character)) continue;
+      const f = found.get(k) || { r, score: 0, who: new Set() };
+      if (f.who.has(c.id)) continue;
+      f.who.add(c.id);
+      f.score += c.top ? 2 : 1;
+      found.set(k, f);
+    }
+  }));
+  const keys = [...found.entries()]
+    .sort((a, b) => b[1].score - a[1].score || (b[1].r.popularity || 0) - (a[1].r.popularity || 0))
+    .slice(0, 30)
+    .map(([k, f]) => { if (!item(k) && !metaOf(k)) rememberResult(k, f.r); return k; });
+  const all = castCache();
+  all[key] = { k: keys, at: Date.now() };
+  const ks = Object.keys(all);
+  if (ks.length > 400) ks.sort((a, b) => all[a].at - all[b].at).slice(0, ks.length - 400).forEach((x) => delete all[x]);
+  LS.set('vds.col.cast', all);
   return keys;
 }
 

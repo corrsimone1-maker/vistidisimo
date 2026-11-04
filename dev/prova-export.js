@@ -77,7 +77,9 @@ const OUT = process.argv[2] || require('os').tmpdir();
   check('Simkl: intestazione', head.join(',') === 'simkl_id,TVDB_ID,TMDB,IMDB_ID,MAL_ID,Type,Title,Year,LastEpWatched,Watchlist,WatchedDate,Rating,Memo');
   check(`Simkl: un titolo per riga (${Object.keys(lib).length})`, skRows.length - 1 === Object.keys(lib).length);
   const tvRows = skRows.slice(1).filter((r) => col(r, 'Type') !== 'movie');
-  check('Simkl: serie con id TVDB (tranne quelle che TMDB non ha)', tvRows.filter((r) => !col(r, 'TVDB_ID')).length === (lib['tv:1399'] ? 1 : 0));
+  // il TMDB finto non dà l'id TVDB del Trono di Spade (1399): manca solo se non è già in meta.json (dal 4/11/2026 c'è)
+  const realMeta = JSON.parse(fs.readFileSync(path.join(DATA, 'meta.json'), 'utf8')).items;
+  check('Simkl: serie con id TVDB (tranne quelle che TMDB non ha)', tvRows.filter((r) => !col(r, 'TVDB_ID')).length === (lib['tv:1399'] && !realMeta['tv:1399']?.tvdb ? 1 : 0));
   check('Simkl: ultimo episodio come s2e4 per le serie iniziate', tvRows.filter((r) => col(r, 'LastEpWatched')).every((r) => /^s\d+e\d+$/.test(col(r, 'LastEpWatched'))));
   check('Simkl: stati validi', skRows.slice(1).every((r) => ['completed', 'watching', 'plantowatch', 'dropped'].includes(col(r, 'Watchlist'))));
   check('Simkl: tipi validi (movie, tv, anime)', skRows.slice(1).every((r) => ['movie', 'tv', 'anime'].includes(col(r, 'Type'))));

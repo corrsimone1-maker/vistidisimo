@@ -6,7 +6,9 @@
 // - la saga di TMDB (film);
 // - MyAnimeList (serie anime): film, OVA, speciali, spin-off, serie prima e dopo (js/mal.js);
 // - Wikidata: seguiti, prequel, spin-off, opere derivate, serie e franchise (js/wikidata.js);
-// - TMDB: titoli che cominciano allo stesso modo, «Vis a vis» → «Vis a vis: El oasis» (js/collection.js);
+// - TMDB: titoli con gli stessi personaggi fatti dagli stessi attori (spin-off, seguiti, film di una serie
+//   o di un anime: Berlino ↔ La casa di carta, Naruto ↔ Boruto e i film) e titoli che cominciano allo
+//   stesso modo, «Vis a vis» → «Vis a vis: El oasis» (js/collection.js);
 // - collegamenti fatti a mano dal menu ⋯ del titolo o dalla pagina (`links`), meno quelli nascosti
 //   (`nolinks`).
 import { html, icon, img, posterCard, today, openSheet } from '../ui.js';
@@ -15,7 +17,7 @@ import { tm, tmdbToken, nonLatin, fetchDetails } from '../tmdb.js';
 import { isAnimeResult } from '../derive.js';
 import { fetchFranchise, cachedFranchise, saveFranchise, FORMAT_LABEL } from '../mal.js';
 import { fetchWiki, cachedWiki } from '../wikidata.js';
-import { fetchByTitle, cachedByTitle, miniOf, ensureMini, rememberResult, manualOf } from '../collection.js';
+import { fetchByTitle, cachedByTitle, fetchByCast, cachedByCast, miniOf, ensureMini, rememberResult, manualOf } from '../collection.js';
 import { checkFiller } from '../filler.js';
 import { focusJikan, jikanDown } from '../jikan.js';
 import { getSaga } from './saga.js';
@@ -43,6 +45,7 @@ function stateOf(key, x) {
   const done = () => repaint();
   if (!s.wd) s.wd = source(cachedWiki(key), () => fetchWiki(key), done);
   if (!s.tt && tmdbToken() && (x.t || x.ot)) s.tt = source(cachedByTitle(key), () => fetchByTitle(key, [x.ot, x.t], x.l), done);
+  if (!s.cast && tmdbToken()) s.cast = source(cachedByCast(key), () => fetchByCast(key), done);
   // MyAnimeList solo per le serie anime
   if (!s.mal && key.startsWith('tv:') && x.anime) {
     const c = cachedFranchise(key);
@@ -92,7 +95,7 @@ function build(key, x) {
     else add({ mal: y.id, u: y.u, t: y.t, p: y.c, d: y.d, l, a: true, kind: y.f === 'Movie' ? 'movie' : 'tv' });
   }
   const man = manualOf(key);
-  for (const k of [...(s.wd.k || []), ...(s.tt?.k || []), ...man.add]) add({ key: k });
+  for (const k of [...(s.wd.k || []), ...(s.tt?.k || []), ...(s.cast?.k || []), ...man.add]) add({ key: k });
   for (const k of man.add) out.get(k).manual = true;
   for (const k of man.hide) out.delete(k);
   // la saga di ogni film collegato entra tutta (scelta del 4/11/2026: la serie di Madoka aveva 4 titoli e il
@@ -123,7 +126,7 @@ function build(key, x) {
   }
   if (missing.length) ensureMini(missing, () => repaint());
   list.sort((a, b) => (a.d || '9999').localeCompare(b.d || '9999') || (a.t || '').localeCompare(b.t || ''));
-  const loading = !!(s.wd.loading || s.tt?.loading || s.mal?.loading || sagaLoading || missing.length);
+  const loading = !!(s.wd.loading || s.tt?.loading || s.cast?.loading || s.mal?.loading || sagaLoading || missing.length);
   return { list, loading, s };
 }
 
