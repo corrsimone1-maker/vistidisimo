@@ -16,7 +16,8 @@ const OUT = process.argv[2] || require('os').tmpdir();
 
 // aggregate_credits delle serie: [idAttore, personaggio, episodi]
 const SHOWS = {
-  71446: [[1, 'Silene Oliveira / Tokyo', 41], [2, 'Sergio Marquina / El Profesor', 41], [3, 'Raquel Murillo / Lisboa', 41], [7, 'Aníbal Cortés / Río', 41], [8, 'Mirko Dragić / Helsinki', 41], [5, 'Ágata Jiménez / Nairobi', 32], [4, 'Andrés de Fonollosa / Berlín', 31], [6, 'Alicia Sierra', 16], [10, 'Self', 2]],
+  // come su TMDB, Pedro Alonso (Berlino) ha meno episodi di una decina di altri attori: deve entrare lo stesso
+  71446: [[1, 'Silene Oliveira / Tokyo', 41], [2, 'Sergio Marquina / El Profesor', 41], [3, 'Raquel Murillo / Lisboa', 41], [7, 'Aníbal Cortés / Río', 41], [8, 'Mirko Dragić / Helsinki', 41], [11, 'Daniel Ramos / Denver', 41], [12, 'Mónica Gaztambide / Estocolmo', 41], [13, 'Arturo Román', 38], [14, 'Ángel Rubio', 30], [15, 'Luis Tamayo', 34], [5, 'Ágata Jiménez / Nairobi', 32], [4, 'Andrés de Fonollosa / Berlín', 31], [6, 'Alicia Sierra', 16], [16, 'Guardia', 3], [10, 'Self', 2]],
   146176: [[4, "Andrés de Fonollosa 'Berlín'", 8], [9, 'Keila', 8], [21, 'Damián', 8]],
   308014: [[4, 'Berlín', 8], [9, 'Keila', 8]],
   62455: [[30, 'Macarena Ferreiro', 40], [6, 'Zulema Zahir', 40], [5, 'Saray Vargas', 40]],

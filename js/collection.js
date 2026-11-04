@@ -83,7 +83,10 @@ export async function fetchByTitle(key, names, lang) {
 // dove fanno **lo stesso personaggio**. Funziona per film, serie e anime, senza altre fonti.
 // Risultato sul telefono `vds.col.cast` per 7 giorni; i ruoli degli attori solo in memoria (sono tanti).
 const CAST_TTL = 7 * DAY;
-const MAIN_CAST = 8;
+// quanti attori principali: nelle serie quelli con almeno un quinto degli episodi del primo (Pedro Alonso nella
+// Casa di carta ne ha meno di una decina di altri, ma è Berlino), fino a 15; nei film i primi 10
+const MAIN_TV = 15;
+const MAIN_MOVIE = 10;
 // parole che non dicono chi è il personaggio («Self», «Narrator», «Young Mike»…)
 const GENERIC = new Set(('self himself herself themselves yourself narrator narratore narrador voice voices voce additional host '
   + 'guest various uncredited archive footage young younger older old little man woman men women boy girl kid kids child children baby '
@@ -136,11 +139,12 @@ async function mainCast(type, id) {
     const cast = (d?.cast || []).map((c) => ({ id: c.id, ch: (c.roles || []).map((r) => r.character).filter(Boolean).join(' / '), n: c.total_episode_count || 0 }))
       .filter((c) => charNames(c.ch).length)
       .sort((a, b) => b.n - a.n);
-    return cast.slice(0, MAIN_CAST).map((c, i) => ({ id: c.id, ch: c.ch, top: i < 3 }));
+    const min = Math.max(2, (cast[0]?.n || 0) / 5);
+    return cast.filter((c, i) => i < 3 || c.n >= min).slice(0, MAIN_TV).map((c, i) => ({ id: c.id, ch: c.ch, top: i < 3 }));
   }
   const d = await tm(`/movie/${id}/credits`);
   const cast = (d?.cast || []).filter((c) => charNames(c.character).length).sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
-  return cast.slice(0, MAIN_CAST).map((c, i) => ({ id: c.id, ch: c.character, top: i < 3 }));
+  return cast.slice(0, MAIN_MOVIE).map((c, i) => ({ id: c.id, ch: c.character, top: i < 3 }));
 }
 // I titoli dove gli attori principali di `key` fanno lo stesso personaggio: array di chiavi, dal più
 // legato (più attori in comune) al meno. Si scartano le comparsate (1 episodio) e i programmi che non
