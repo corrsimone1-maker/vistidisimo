@@ -86,7 +86,7 @@ const malAnime = (id, full) => {
   const check = (label, ok) => { console.log(`${ok ? 'ok ' : 'NO '} ${label}`); if (!ok) errors.push('fallita: ' + label); };
   const base = 'http://127.0.0.1:8144/vistidisimo/';
 
-  const M = makeMocks(path.join(DATA, 'library.json'), { animeKeys: new Set(['tv:31910', 'tv:73223', 'tv:46260', 'tv:70881']) });
+  const M = makeMocks(path.join(DATA, 'library.json'), { animeKeys: new Set(['tv:31910', 'tv:73223', 'tv:46260', 'tv:70881', 'movie:880003']) });
   M.files['meta.json'] = fs.readFileSync(path.join(DATA, 'meta.json'), 'utf8'); M.shas['meta.json'] = 'meta0';
   // un film di Naruto in libreria (visto), per vedere lo stato nella riga «Film e OVA»
   { const d = JSON.parse(M.files['library.json']); d.items['movie:880003'] = { type: 'movie', id: 880003, title: 'Naruto Shippuden: Eredi della volontà del fuoco', year: 2009, status: 'completed', rating: null, added: '2020-01-01T10:00:00Z', last: '2020-01-02T10:00:00Z', fav: null, rewatch: 0, seen: '2020-01-02' }; M.files['library.json'] = JSON.stringify(d); }

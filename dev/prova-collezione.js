@@ -42,8 +42,12 @@ const VIS = [
 ];
 // Madoka: la serie trova il film «Parte 3» per il nome; il film porta la saga (Parte 1, 2, 3, Walpurgis)
 const MADOKA = [
-  { ...R('tv', 39218, 'Puella Magi Madoka Magica', '2011-01-07', 80, 1500, true, 'ja'), original_name: '魔法少女まどか☆マギカ' },
-  { ...R('movie', 212162, 'Puella Magi Madoka Magica: Parte 3 - La storia della ribellione', '2013-10-26', 20, 400, true, 'ja'), original_title: '劇場版 魔法少女まどか☆マギカ[新編]叛逆の物語' },
+  { ...R('tv', 39218, 'Puella Magi Madoka Magica', '2011-01-07', 80, 1500, true, 'ja'), original_name: '魔法少女まどか☆マギカ', genre_ids: [16, 18], origin_country: ['JP'] },
+  { ...R('movie', 212162, 'Puella Magi Madoka Magica: Parte 3 - La storia della ribellione', '2013-10-26', 20, 400, true, 'ja'), original_title: '劇場版 魔法少女まどか☆マギカ[新編]叛逆の物語', genre_ids: [16, 18] },
+  // lo spin-off: su TMDB e Wikidata non è collegato, lo trova il titolo di Madoka dentro il suo
+  { ...R('tv', 94523, 'Magia Record: Puella Magi Madoka Magica Side Story', '2020-01-05', 30, 300, true, 'ja'), original_name: 'マギアレコード 魔法少女まどか☆マギカ外伝', genre_ids: [16, 18], origin_country: ['JP'] },
+  // e uno che non c'entra (stesse parole ma non dopo un separatore)
+  { ...R('tv', 700020, 'Puella Magi Madoka Magica Fan Club', '2015-01-01', 1, 20, true, 'ja'), genre_ids: [16] },
 ];
 const MADOKA_SAGA = { id: 212166, name: 'Puella Magi Madoka Magica - Collezione', parts: [
   { id: 212164, title: 'Puella Magi Madoka Magica: Parte 1 - Inizio', release_date: '2012-10-06', poster_path: '/p_movie_212164.jpg', genre_ids: [16], original_language: 'ja' },
@@ -52,8 +56,8 @@ const MADOKA_SAGA = { id: 212166, name: 'Puella Magi Madoka Magica - Collezione'
   { id: 822653, title: 'Puella Magi Madoka Magica the Movie - Il risveglio di Walpurgis', release_date: '2026-08-28', poster_path: '/p_movie_822653.jpg', genre_ids: [16], original_language: 'ja' },
 ] };
 const DETAILS = {
-  'tv:39218': { name: 'Puella Magi Madoka Magica', original_name: '魔法少女まどか☆マギカ', first_air_date: '2011-01-07', original_language: 'ja', origin_country: ['JP'] },
-  'movie:212162': { title: 'Puella Magi Madoka Magica: Parte 3 - La storia della ribellione', original_title: '劇場版 魔法少女まどか☆マギカ[新編]叛逆の物語', release_date: '2013-10-26', original_language: 'ja', origin_country: ['JP'], belongs_to_collection: { id: 212166, name: 'Puella Magi Madoka Magica - Collezione' } },
+  'tv:39218': { name: 'Puella Magi Madoka Magica', original_name: '魔法少女まどか☆マギカ', first_air_date: '2011-01-07', original_language: 'ja', origin_country: ['JP'], genres: [{ id: 16, name: 'Animazione' }, { id: 18, name: 'Dramma' }] },
+  'movie:212162': { title: 'Puella Magi Madoka Magica: Parte 3 - La storia della ribellione', original_title: '劇場版 魔法少女まどか☆マギカ[新編]叛逆の物語', release_date: '2013-10-26', original_language: 'ja', origin_country: ['JP'], genres: [{ id: 16, name: 'Animazione' }, { id: 18, name: 'Dramma' }], belongs_to_collection: { id: 212166, name: 'Puella Magi Madoka Magica - Collezione' } },
   'tv:113036': { name: 'La casa di carta: Corea', original_name: '종이의 집: 공동경제구역', first_air_date: '2022-06-24', original_language: 'ko', origin_country: ['KR'] },
   'tv:71446': { name: 'La casa di carta', original_name: 'La casa de papel', first_air_date: '2017-05-02', original_language: 'es', origin_country: ['ES'] },
   'tv:146176': { name: 'Berlino e i gioielli di Parigi', original_name: 'Berlín', first_air_date: '2023-12-29', original_language: 'es', origin_country: ['ES'] },
@@ -103,7 +107,7 @@ const DETAILS = {
     const m = p.match(/^\/(tv|movie)\/(\d+)$/);
     if (m && DETAILS[`${m[1]}:${m[2]}`]) {
       const extra = DETAILS[`${m[1]}:${m[2]}`];
-      return M.tmdb({ request: () => route.request(), fulfill: (o) => { const b = JSON.parse(o.body); Object.assign(b, extra, { genres: [{ id: 18, name: 'Dramma' }, { id: 80, name: 'Crime' }], poster_path: `/p_${m[1]}_${m[2]}.jpg` }); return route.fulfill({ ...o, body: JSON.stringify(b) }); } });
+      return M.tmdb({ request: () => route.request(), fulfill: (o) => { const b = JSON.parse(o.body); Object.assign(b, { genres: [{ id: 18, name: 'Dramma' }, { id: 80, name: 'Crime' }] }, extra, { poster_path: `/p_${m[1]}_${m[2]}.jpg` }); return route.fulfill({ ...o, body: JSON.stringify(b) }); } });
     }
     return M.tmdb(route);
   });
@@ -250,14 +254,15 @@ const DETAILS = {
   const colOf = async (hash) => {
     await page.goto(base + hash);
     await page.waitForSelector('.d-fr .pc', { timeout: 10000 });
-    await page.waitForFunction(() => document.querySelectorAll('.d-fr .pc').length >= 5, null, { timeout: 8000 }).catch(() => {});
+    await page.waitForFunction(() => document.querySelectorAll('.d-fr .pc').length >= 6, null, { timeout: 8000 }).catch(() => {});
     return rowTitles();
   };
   const mS = await colOf('#/t/tv/39218');
   const mF = await colOf('#/t/movie/212162');
   console.log('    serie:', mS.join(' | '));
   console.log('    film: ', mF.join(' | '));
-  check(`Madoka: serie e film con la stessa collezione (${mS.length} e ${mF.length})`, mS.length === 5 && mS.join('|') === mF.join('|') && mS.some((t) => /Walpurgis/.test(t)));
+  check(`Madoka: serie e film con la stessa collezione (${mS.length} e ${mF.length})`, mS.length === 6 && mS.join('|') === mF.join('|') && mS.some((t) => /Walpurgis/.test(t)));
+  check('Madoka: Magia Record (il titolo di Madoka sta nel suo, dopo i due punti), non «Fan Club»', mS.some((t) => /Magia Record/.test(t)) && !mS.some((t) => /Fan Club/.test(t)));
   await page.$eval('.d-fr', (e) => e.scrollIntoView({ block: 'center' }));
   await shot('7-madoka-film');
 

@@ -17,7 +17,7 @@ import { tm, tmdbToken, nonLatin, fetchDetails } from '../tmdb.js';
 import { isAnimeResult } from '../derive.js';
 import { fetchFranchise, cachedFranchise, saveFranchise, FORMAT_LABEL } from '../mal.js';
 import { fetchWiki, cachedWiki } from '../wikidata.js';
-import { fetchByTitle, cachedByTitle, fetchByCast, cachedByCast, miniOf, ensureMini, rememberResult, manualOf } from '../collection.js';
+import { fetchByTitle, cachedByTitle, fetchByCast, cachedByCast, miniOf, ensureMini, rememberResult, manualOf, unwanted } from '../collection.js';
 import { checkFiller } from '../filler.js';
 import { focusJikan, jikanDown } from '../jikan.js';
 import { getSaga } from './saga.js';
@@ -30,11 +30,12 @@ const known = new Map(); // key -> { t, ot, co, anime } (dalla pagina del titolo
 const states = new Map(); // key -> { wd, tt, mal }
 
 // Una fonte che si scarica una volta per apertura dell'app (se la copia sul telefono è vecchia).
+// s.v = quello che la fonte ha dato ({ k, … }), anche vecchio, intanto che si riscarica.
 function source(cached, fetcher, done) {
-  const s = { k: cached?.k || null, loading: false, err: '' };
+  const s = { v: cached || null, loading: false, err: '' };
   if (!cached || cached.stale) {
     s.loading = true;
-    fetcher().then((k) => { s.k = k; }).catch((e) => { s.err = e.message; }).finally(() => { s.loading = false; done(); });
+    fetcher().then((v) => { s.v = v; }).catch((e) => { s.err = e.message; }).finally(() => { s.loading = false; done(); });
   }
   return s;
 }
@@ -45,7 +46,7 @@ function stateOf(key, x) {
   const done = () => repaint();
   if (!s.wd) s.wd = source(cachedWiki(key), () => fetchWiki(key), done);
   if (!s.tt && tmdbToken() && (x.t || x.ot)) s.tt = source(cachedByTitle(key), () => fetchByTitle(key, [x.ot, x.t], x.l), done);
-  if (!s.cast && tmdbToken()) s.cast = source(cachedByCast(key), () => fetchByCast(key), done);
+  if (!s.cast && tmdbToken()) s.cast = source(cachedByCast(key), () => fetchByCast(key, { t: x.t, ot: x.ot, l: x.l, anime: !!x.anime }), done);
   // MyAnimeList solo per le serie anime
   if (!s.mal && key.startsWith('tv:') && x.anime) {
     const c = cachedFranchise(key);
@@ -67,10 +68,20 @@ function stateOf(key, x) {
 }
 
 // ---------- elenco ----------
-// [{ key | mal+u, t, p, d, a, l, kind, self }] in ordine di uscita; loading = qualcosa sta arrivando
+// Regole (4/11/2026, dopo «Il duca della morte» in Jujutsu Kaisen e i due film dal vero in Tokyo Ghoul):
+// - anime solo con anime e il resto solo col resto (saghe comprese): nella Collezione di un anime non entrano
+//   i film dal vero tratti dallo stesso manga, e viceversa. I collegamenti fatti a mano entrano sempre;
+// - Wikidata (js/wikidata.js): gli spin-off entrano; la «famiglia» (franchise, adattamenti, opere dallo stesso
+//   manga) tra anime sì, altrimenti solo se un'altra fonte la conferma (stessi personaggi, anche deboli, o stesso
+//   nome); i seguiti (P155/P156/P179) solo se confermati;
+// - mai film per adulti, notiziari, reality e talk show;
+// - stessi personaggi: solo i collegamenti sicuri (js/collection.js);
+// - stesso nome: i titoli conosciuti, e quelli poco votati solo se sono in libreria.
+// [{ key | mal+u, t, p, d, a, l, kind, self, manual }] in ordine di uscita; loading = qualcosa sta arrivando
 function build(key, x) {
   const [type] = key.split(':');
   const s = stateOf(key, x);
+  const anime = !!x.anime;
   const out = new Map();
   const add = (e) => {
     const id = e.key || `mal:${e.mal}`;
@@ -79,52 +90,65 @@ function build(key, x) {
     for (const [k, v] of Object.entries(e)) if (cur[k] == null || cur[k] === '') cur[k] = v;
   };
   add({ key, self: true });
-  let sagaLoading = false;
-  const sagasDone = new Set();
-  const addSaga = (co) => {
-    if (!co || sagasDone.has(co[0]) || sagasDone.size >= 4) return;
-    sagasDone.add(co[0]);
-    const sg = getSaga(co[0], { done: () => repaint() });
-    if (!sg) sagaLoading = true;
-    else if (!sg.err) for (const f of sg.films) add({ key: `movie:${f.id}`, t: f.t, p: f.p, d: f.d, a: isAnimeResult(f) });
-  };
-  if (type === 'movie') addSaga(x.co);
   for (const y of s.mal?.data?.items || []) {
     const l = y.l || (y.f === 'TV' ? 'Spin-off' : FORMAT_LABEL[y.f] || y.f);
     if (y.key) add({ key: y.key, t: y.tt || y.t, p: y.tp || y.c, d: y.d, l, a: true });
     else add({ mal: y.id, u: y.u, t: y.t, p: y.c, d: y.d, l, a: true, kind: y.f === 'Movie' ? 'movie' : 'tv' });
   }
   const man = manualOf(key);
-  for (const k of [...(s.wd.k || []), ...(s.tt?.k || []), ...(s.cast?.k || []), ...man.add]) add({ key: k });
-  for (const k of man.add) out.get(k).manual = true;
+  const wd = s.wd.v || {}; const tt = s.tt?.v || {}; const cs = s.cast?.v || {};
+  const stem = [...(tt.k || []), ...(tt.lo || []).filter((k) => item(k))];
+  const confirm = new Set([...(cs.k || []), ...(cs.w || []), ...stem]);
+  for (const k of [...(wd.k || []), ...stem, ...(cs.k || [])]) add({ key: k });
+  for (const k of wd.f || []) add({ key: k, onlyAnime: !confirm.has(k) });
+  for (const k of wd.s || []) if (confirm.has(k)) add({ key: k });
+  for (const k of man.add) add({ key: k, manual: true });
   for (const k of man.hide) out.delete(k);
-  // la saga di ogni film collegato entra tutta (scelta del 4/11/2026: la serie di Madoka aveva 4 titoli e il
-  // suo film 5, perché il film porta la saga e la serie no): così serie e film vedono la stessa collezione
-  const needCo = [];
-  for (const e of [...out.values()]) {
-    if (!e.key?.startsWith('movie:') || e.self) continue;
-    const mi = miniOf(e.key);
-    if (mi?.co) addSaga(mi.co);
-    else if (mi && mi.co === undefined && !mi.lib && !mi.gone) needCo.push(e.key);
-  }
-  for (const k of man.hide) out.delete(k);
-  if (needCo.length) ensureMini(needCo, () => repaint());
-  // titolo, locandina e data di quelli che non li hanno ancora
+  // anime con anime (`a` non ancora noto, per un titolo appena aggiunto, non esclude); la famiglia di Wikidata
+  // senza conferma solo tra anime; mai film per adulti, notiziari, reality, talk show
+  const fits = (e, mi) => e.self || e.manual || ((mi?.a == null || !!mi.a === anime)
+    && (!e.onlyAnime || (anime && mi?.a)) && !unwanted(mi));
+  // titolo, locandina e data; chi non torna con le regole esce; le saghe dei film che restano
+  let sagaLoading = false;
+  const sagas = [];
+  if (type === 'movie' && x.co) sagas.push(x.co);
   const missing = [];
-  const list = [];
-  for (const e of out.values()) {
-    if (e.key) {
-      const mi = miniOf(e.key);
-      if (mi?.gone) continue;
-      if (e.self) Object.assign(e, { t: e.t || x.t || mi?.t, d: e.d || mi?.d || x.d || '', p: e.p || mi?.p, a: x.anime });
-      else if (!mi && !e.t) { missing.push(e.key); continue; }
-      else for (const f of ['t', 'p', 'd', 'a']) if ((e[f] == null || e[f] === '') && mi?.[f] != null) e[f] = mi[f];
-      // titoli in libreria: come li vedi altrove
-      if (mi?.lib) e.t = mi.t || e.t;
+  const needCo = [];
+  for (const [id, e] of [...out]) {
+    if (!e.key) continue;
+    const mi = miniOf(e.key);
+    if (mi?.gone) { out.delete(id); continue; }
+    if (e.self) { Object.assign(e, { t: e.t || x.t || mi?.t, d: e.d || mi?.d || x.d || '', p: e.p || mi?.p, a: anime }); continue; }
+    if (!mi && !e.t) { missing.push(e.key); out.delete(id); continue; }
+    if (!fits(e, mi || { a: e.a })) { out.delete(id); continue; }
+    for (const f of ['t', 'p', 'd', 'a']) if ((e[f] == null || e[f] === '') && mi?.[f] != null) e[f] = mi[f];
+    if (mi?.lib) e.t = mi.t || e.t; // titoli in libreria: come li vedi altrove
+    // la saga di ogni film collegato entra tutta (4/11/2026: la serie di Madoka aveva 4 titoli e il suo film 5,
+    // perché il film porta la saga e la serie no): così serie e film vedono la stessa collezione
+    if (e.key.startsWith('movie:')) {
+      if (mi?.co) sagas.push(mi.co);
+      else if (mi && mi.co === undefined && !mi.lib) needCo.push(e.key);
     }
-    list.push(e);
   }
+  const sagasDone = new Set();
+  for (const co of sagas) {
+    if (sagasDone.has(co[0]) || sagasDone.size >= 4) continue;
+    sagasDone.add(co[0]);
+    const sg = getSaga(co[0], { done: () => repaint() });
+    if (!sg) { sagaLoading = true; continue; }
+    if (sg.err) continue;
+    for (const f of sg.films) {
+      const k = `movie:${f.id}`;
+      if (out.has(k) || man.hide.has(k)) continue;
+      const mi = miniOf(k);
+      if (mi?.gone) continue;
+      const e = { key: k, t: mi?.lib ? mi.t : f.t, p: mi?.p || f.p, d: f.d || mi?.d || '', a: mi?.a ?? isAnimeResult(f) };
+      if (fits(e, { ...mi, a: e.a })) out.set(k, e);
+    }
+  }
+  if (needCo.length) ensureMini(needCo, () => repaint());
   if (missing.length) ensureMini(missing, () => repaint());
+  const list = [...out.values()];
   list.sort((a, b) => (a.d || '9999').localeCompare(b.d || '9999') || (a.t || '').localeCompare(b.t || ''));
   const loading = !!(s.wd.loading || s.tt?.loading || s.cast?.loading || s.mal?.loading || sagaLoading || missing.length);
   return { list, loading, s };

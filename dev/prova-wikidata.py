@@ -6,16 +6,31 @@ controllati (percorsi, sottoquery con HAVING, OPTIONAL/BOUND). Serve rdflib:
     pip install --break-system-packages rdflib
     python3 dev/prova-wikidata.py
 """
-import pathlib, re, sys
+import json, pathlib, subprocess, sys
 from rdflib import Graph, Namespace, Literal
 
-src = (pathlib.Path(__file__).resolve().parent.parent / 'js' / 'wikidata.js').read_text()
-tmpl = re.search(r'export function wdQuery\(type, id\) \{.*?return `(.*?)`;', src, re.S).group(1)
-max_group = re.search(r'const MAX_GROUP = (\d+);', src).group(1)
+JS = pathlib.Path(__file__).resolve().parent.parent / 'js' / 'wikidata.js'
 
-def query(typ, i):
-    P = 'P4947' if typ == 'movie' else 'P4983'
-    return tmpl.replace('${P}', P).replace('${lit}', f'"{i}"').replace('${MAX_GROUP}', max_group)
+def queries(pairs):
+    """wdQuery di js/wikidata.js (eseguita con node, senza store.js) per ogni (tipo, id)."""
+    src = JS.read_text().replace("import { LS } from './store.js';", 'const LS = { get: () => ({}), set() {} };')
+    code = src + '\nconsole.log(JSON.stringify(' + json.dumps(pairs) + '.map(([t, i]) => wdQuery(t, i))));'
+    out = subprocess.run(['node', '--input-type=module', '-e', code], capture_output=True, text=True, check=True).stdout
+    return json.loads(out)
+
+def keys_from(rows, self_key):
+    """Come keysFromResults: { chiave: 0 spin-off | 2 famiglia | 1 seguito }, il più sicuro vince (in
+    quest'ordine)."""
+    order = {0: 0, 2: 1, 1: 2}
+    best = {}
+    for row in rows:
+        w = int(row.w)
+        for v, typ in ((row.tv, 'tv'), (row.mv, 'movie')):
+            if v is None: continue
+            k = f'{typ}:{v}'
+            if k == self_key: continue
+            if k not in best or order[w] < order[best[k]]: best[k] = w
+    return best
 
 WD = Namespace('http://www.wikidata.org/entity/')
 WDT = Namespace('http://www.wikidata.org/prop/direct/')
@@ -37,28 +52,45 @@ for k in range(41): mv(f'Q30{k}', 3000 + k); t(f'Q30{k}', 'P8345', 'Q30')
 for k in range(3): mv(f'Q40{k}', 4000 + k); t(f'Q40{k}', 'P8345', 'Q40')
 # catena con un anello senza id TMDB
 mv('Q50', 50); t('Q50', 'P156', 'Q51'); t('Q51', 'P156', 'Q52'); mv('Q52', 52)
-# «basato su»: remake, e due film tratti dallo stesso romanzo (non collegati tra loro)
+# «basato su»: remake, e due film tratti dallo stesso romanzo (stessa fonte: solo se confermati)
 mv('Q60', 60); mv('Q61', 61); t('Q61', 'P144', 'Q60')
 mv('Q70', 70); mv('Q71', 71); t('Q70', 'P144', 'Q79'); t('Q71', 'P144', 'Q79')
+# anime tratto da un manga, film anime e film dal vero dallo stesso manga (il manga elenca le opere derivate)
+tv('Q80', 800); mv('Q81', 801); mv('Q82', 802); t('Q80', 'P144', 'Q89'); t('Q81', 'P144', 'Q89'); t('Q89', 'P4969', 'Q82')
+# fascia oraria: P155/P156 tra due anime diversi; un contenitore (P179) con un id TMDB e uno senza (gli altri
+# titoli dello stesso contenitore non si prendono più: query troppo lenta sul servizio vero)
+tv('Q83', 830); t('Q80', 'P156', 'Q83')
+tv('Q84', 840); t('Q80', 'P179', 'Q91'); t('Q84', 'P179', 'Q91')
+tv('Q85', 850); tv('Q86', 860); t('Q85', 'P179', 'Q86')
 
+S, F, W = 0, 2, 1  # spin-off, famiglia, seguito
 cases = [
-    ('tv', 71446, {'tv:146176', 'tv:113036'}), ('tv', 113036, {'tv:71446', 'tv:146176'}), ('tv', 146176, {'tv:71446', 'tv:113036'}),
-    ('tv', 62455, {'tv:97951'}), ('tv', 97951, {'tv:62455'}),
-    ('tv', 1396, {'movie:559969', 'tv:60059'}), ('movie', 559969, {'tv:1396'}), ('tv', 60059, {'tv:1396'}),
-    ('movie', 3, {'movie:1', 'movie:2'}), ('movie', 1, {'movie:2', 'movie:3'}),
-    ('movie', 3005, set()), ('movie', 4001, {'movie:4000', 'movie:4002'}),
-    ('movie', 50, {'movie:52'}), ('movie', 60, {'movie:61'}), ('movie', 61, {'movie:60'}), ('movie', 70, set()),
-    ('movie', 999999, set()),
+    ('tv', 71446, {'tv:146176': S, 'tv:113036': S}), ('tv', 113036, {'tv:71446': S, 'tv:146176': S}), ('tv', 146176, {'tv:71446': S, 'tv:113036': S}),
+    ('tv', 62455, {'tv:97951': S}), ('tv', 97951, {'tv:62455': S}),
+    ('tv', 1396, {'movie:559969': F, 'tv:60059': S}), ('movie', 559969, {'tv:1396': W}), ('tv', 60059, {'tv:1396': S}),
+    ('movie', 3, {'movie:1': W, 'movie:2': W}), ('movie', 1, {'movie:2': W, 'movie:3': W}),
+    ('movie', 3005, {}), ('movie', 4001, {'movie:4000': F, 'movie:4002': F}),
+    ('movie', 50, {'movie:52': W}), ('movie', 60, {'movie:61': F}), ('movie', 61, {'movie:60': F}), ('movie', 70, {'movie:71': F}),
+    ('tv', 800, {'movie:801': F, 'movie:802': F, 'tv:830': W}), ('movie', 801, {'tv:800': F, 'movie:802': F}),
+    ('tv', 850, {'tv:860': W}), ('tv', 860, {'tv:850': F}),
+    ('movie', 999999, {}),
 ]
 bad = 0
-for typ, i, want in cases:
-    got = set()
-    for row in g.query(query(typ, i)):
-        if row.tv is not None: got.add(f'tv:{row.tv}')
-        if row.mv is not None: got.add(f'movie:{row.mv}')
-    got.discard(f'{typ}:{i}')
+qs = queries([[typ, i] for typ, i, _ in cases])
+for (typ, i, want), q in zip(cases, qs):
+    got = keys_from(g.query(q), f'{typ}:{i}')
     ok = got == want
     bad += not ok
-    print('ok ' if ok else 'NO ', f'{typ}:{i}', sorted(got), '' if ok else f'atteso {sorted(want)}')
+    print('ok ' if ok else 'NO ', f'{typ}:{i}', dict(sorted(got.items())), '' if ok else f'atteso {dict(sorted(want.items()))}')
+
+# keysFromResults di js/wikidata.js sulla stessa forma di risposta
+js_check = JS.read_text().replace("import { LS } from './store.js';", 'const LS = { get: () => ({}), set() {} };') + """
+const b = (tv, w) => ({ tv: { value: String(tv) }, w: { value: String(w) } });
+const r = keysFromResults({ results: { bindings: [b(1, 1), b(1, 0), b(2, 1), b(2, 2), b(3, 1), b(4, 2), b(9, 0)] } }, 'tv:9');
+console.log(JSON.stringify(r));"""
+r = json.loads(subprocess.run(['node', '--input-type=module', '-e', js_check], capture_output=True, text=True, check=True).stdout)
+ok = r == {'k': ['tv:1'], 'f': ['tv:2', 'tv:4'], 's': ['tv:3']}
+bad += not ok
+print('ok ' if ok else 'NO ', 'keysFromResults: il collegamento più sicuro vince', r)
 print('\ntutto a posto' if not bad else f'\n{bad} problemi')
 sys.exit(1 if bad else 0)
