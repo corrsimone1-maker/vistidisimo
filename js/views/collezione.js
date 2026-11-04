@@ -77,10 +77,12 @@ function stateOf(key, x) {
 // - mai film per adulti, notiziari, reality e talk show;
 // - stessi personaggi: solo i collegamenti sicuri (js/collection.js);
 // - stesso nome: i titoli conosciuti, e quelli poco votati solo se sono in libreria.
-// [{ key | mal+u, t, p, d, a, l, kind, self, manual }] in ordine di uscita; loading = qualcosa sta arrivando
-function build(key, x) {
+// [{ key | mal+u, t, p, d, a, l, kind, self, manual }] in ordine di uscita, dalle fonti `src` = { wd, tt, cs,
+// mal } (quello che hanno dato). fetch: chiedere saghe e dati mancanti (la pagina) o usare solo quello che c'è
+// (le Novità in Home, js/novita.js). Torna anche cosa manca: missing (titoli senza dati), needCo (film di cui
+// non si sa la saga), sagaPending (saghe non ancora arrivate).
+function compute(key, x, src, { fetch }) {
   const [type] = key.split(':');
-  const s = stateOf(key, x);
   const anime = !!x.anime;
   const out = new Map();
   const add = (e) => {
@@ -90,13 +92,13 @@ function build(key, x) {
     for (const [k, v] of Object.entries(e)) if (cur[k] == null || cur[k] === '') cur[k] = v;
   };
   add({ key, self: true });
-  for (const y of s.mal?.data?.items || []) {
+  for (const y of src.mal?.items || []) {
     const l = y.l || (y.f === 'TV' ? 'Spin-off' : FORMAT_LABEL[y.f] || y.f);
     if (y.key) add({ key: y.key, t: y.tt || y.t, p: y.tp || y.c, d: y.d, l, a: true });
     else add({ mal: y.id, u: y.u, t: y.t, p: y.c, d: y.d, l, a: true, kind: y.f === 'Movie' ? 'movie' : 'tv' });
   }
   const man = manualOf(key);
-  const wd = s.wd.v || {}; const tt = s.tt?.v || {}; const cs = s.cast?.v || {};
+  const wd = src.wd || {}; const tt = src.tt || {}; const cs = src.cs || {};
   const stem = [...(tt.k || []), ...(tt.lo || []).filter((k) => item(k))];
   const confirm = new Set([...(cs.k || []), ...(cs.w || []), ...stem]);
   for (const k of [...(wd.k || []), ...stem, ...(cs.k || [])]) add({ key: k });
@@ -109,7 +111,7 @@ function build(key, x) {
   const fits = (e, mi) => e.self || e.manual || ((mi?.a == null || !!mi.a === anime)
     && (!e.onlyAnime || (anime && mi?.a)) && !unwanted(mi));
   // titolo, locandina e data; chi non torna con le regole esce; le saghe dei film che restano
-  let sagaLoading = false;
+  const sagaPending = [];
   const sagas = [];
   if (type === 'movie' && x.co) sagas.push(x.co);
   const missing = [];
@@ -134,8 +136,8 @@ function build(key, x) {
   for (const co of sagas) {
     if (sagasDone.has(co[0]) || sagasDone.size >= 4) continue;
     sagasDone.add(co[0]);
-    const sg = getSaga(co[0], { done: () => repaint() });
-    if (!sg) { sagaLoading = true; continue; }
+    const sg = getSaga(co[0], fetch ? { done: () => repaint() } : { fetch: false });
+    if (!sg) { sagaPending.push(co[0]); continue; }
     if (sg.err) continue;
     for (const f of sg.films) {
       const k = `movie:${f.id}`;
@@ -146,12 +148,33 @@ function build(key, x) {
       if (fits(e, { ...mi, a: e.a })) out.set(k, e);
     }
   }
-  if (needCo.length) ensureMini(needCo, () => repaint());
-  if (missing.length) ensureMini(missing, () => repaint());
   const list = [...out.values()];
   list.sort((a, b) => (a.d || '9999').localeCompare(b.d || '9999') || (a.t || '').localeCompare(b.t || ''));
-  const loading = !!(s.wd.loading || s.tt?.loading || s.cast?.loading || s.mal?.loading || sagaLoading || missing.length);
-  return { list, loading, s };
+  return { list, missing, needCo, sagaPending };
+}
+
+// La Collezione nella pagina: scarica quello che manca e ridisegna quando arriva.
+// loading = qualcosa sta arrivando
+function build(key, x) {
+  const s = stateOf(key, x);
+  const r = compute(key, x, { wd: s.wd.v, tt: s.tt?.v, cs: s.cast?.v, mal: s.mal?.data }, { fetch: true });
+  if (r.needCo.length) ensureMini(r.needCo, () => repaint());
+  if (r.missing.length) ensureMini(r.missing, () => repaint());
+  const loading = !!(s.wd.loading || s.tt?.loading || s.cast?.loading || s.mal?.loading || r.sagaPending.length || r.missing.length);
+  return { list: r.list, loading, s };
+}
+
+// La Collezione con solo quello che è già sul telefono, senza chiedere niente (per le Novità in Home).
+export function cachedCollection(key, x) {
+  return compute(key, x, { wd: cachedWiki(key), tt: cachedByTitle(key), cs: cachedByCast(key), mal: x.anime && key.startsWith('tv:') ? cachedFranchise(key) : null }, { fetch: false });
+}
+
+// { t, ot, l, y, co, anime } di un titolo in libreria, da meta.json (null se non c'è ancora)
+export function xFromMeta(key) {
+  const m = metaOf(key); const it = item(key);
+  if (!m) return null;
+  const [type] = key.split(':');
+  return { t: titleOf(key, it, m), ot: m.ot, l: m.l, y: m.y, co: type === 'movie' ? m.co : 0, anime: !!(it && typeof it.anime === 'boolean' ? it.anime : (m.g || []).includes(16) && (m.l === 'ja' || (m.c || []).includes('JP'))) };
 }
 
 const seenEntry = (e) => !!e.key && ['completed', 'uptodate'].includes(item(e.key)?.status);
@@ -199,11 +222,8 @@ const asked = new Set();
 function knownOf(key) {
   const x = known.get(key);
   if (x) return x;
-  const m = metaOf(key); const it = item(key);
-  if (m) {
-    const [type] = key.split(':');
-    return { t: titleOf(key, it, m), ot: m.ot, l: m.l, y: m.y, co: type === 'movie' ? m.co : 0, anime: !!(it && typeof it.anime === 'boolean' ? it.anime : (m.g || []).includes(16) && (m.l === 'ja' || (m.c || []).includes('JP'))) };
-  }
+  const fromMeta = xFromMeta(key);
+  if (fromMeta) return fromMeta;
   // aperta da un link senza essere passati dal titolo: servono i suoi dati da TMDB
   if (!asked.has(key) && tmdbToken()) {
     asked.add(key);

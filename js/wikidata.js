@@ -22,13 +22,13 @@
 // della lingua originale su Wikidata (P364), che la rallentava fino a 40 secondi.
 // Jujutsu Kaisen su Wikidata ha solo il manga, il franchise e il film «Execution»: «Il duca della morte» non
 // arrivava da qui ma dagli stessi personaggi («Narration», vedi js/collection.js).
-// Sul telefono in `vds.wd` per 7 giorni (le ultime 400 voci). Se Wikidata non risponde non si salva
+// Sul telefono in `vds.wd` per 7 giorni (le ultime 900 voci: le Novità in Home le chiedono per ogni titolo visto). Se Wikidata non risponde non si salva
 // niente e per 10 minuti non si riprova.
 import { LS } from './store.js';
 
 const WDQS = 'https://query.wikidata.org/sparql';
 const TTL = 7 * 24 * 3600 * 1000;
-const MAX_KEEP = 400;
+const MAX_KEEP = 900;
 const MAX_GROUP = 40;
 const VER = 2;
 let downUntil = 0;

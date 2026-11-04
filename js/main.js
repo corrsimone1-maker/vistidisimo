@@ -12,13 +12,14 @@ import { renderSettings, settingsActions } from './views/settings.js';
 import { checkNewSeasons } from './views/newseason.js';
 import { renderSaga, renderSagas } from './views/saga.js';
 import { renderCollezione, collezioneActions } from './views/collezione.js';
+import { renderNews, newsActions, scanNews } from './novita.js';
 
 const view = document.getElementById('view');
 const scrollMem = new Map();
-const TAB_OF = { home: 'home', raccolta: 'home', liste: 'home', lista: 'home', impostazioni: 'home', libreria: 'libreria', saghe: 'libreria', cerca: 'cerca', prossimi: 'prossimi' };
+const TAB_OF = { home: 'home', novita: 'home', raccolta: 'home', liste: 'home', lista: 'home', impostazioni: 'home', libreria: 'libreria', saghe: 'libreria', cerca: 'cerca', prossimi: 'prossimi' };
 // schede di dettaglio: restano sulla scheda della barra da cui le hai aperte
 const DETAIL = new Set(['t', 'ep', 'ripasso', 'persona', 'saga', 'extra', 'collezione']);
-const KEEP_SCROLL = new Set(['home', 'raccolta', 'liste', 'lista', 'libreria', 'saghe', 'cerca', 'prossimi']);
+const KEEP_SCROLL = new Set(['home', 'novita', 'raccolta', 'liste', 'lista', 'libreria', 'saghe', 'cerca', 'prossimi']);
 let lastTab = 'home';
 let navDepth = 0;
 let currentHash = location.hash;
@@ -36,6 +37,7 @@ function renderRoute() {
   let out;
   switch (r.name) {
     case 'raccolta': out = renderCollection(r.parts[1]); break;
+    case 'novita': out = renderNews(); break;
     case 'libreria': out = renderLibrary(); break;
     case 'cerca': out = renderSearch(); break;
     case 'prossimi': out = renderUpcoming(rerender); break;
@@ -107,7 +109,7 @@ function isHistoryReturn() {
 }
 
 // tornando su Prossimi da un'altra scheda della barra l'ordine si rifà da capo
-const OTHER_TABS = new Set(['home', 'raccolta', 'liste', 'lista', 'impostazioni', 'libreria', 'saghe', 'cerca']);
+const OTHER_TABS = new Set(['home', 'novita', 'raccolta', 'liste', 'lista', 'impostazioni', 'libreria', 'saghe', 'cerca']);
 
 function onHash() {
   if (OTHER_TABS.has(parse(location.hash).name)) resetUpcomingOrder();
@@ -132,7 +134,7 @@ const go = (hash) => { location.hash = hash; };
 const back = () => { if (navDepth > 0 && history.length > 1) { navDepth -= 2; history.back(); } else location.hash = '#/home'; };
 
 const ACTIONS = {
-  ...libraryActions, ...searchActions, ...upcomingActions, ...detailActions, ...episodeActions, ...listActions, ...settingsActions, ...collezioneActions,
+  ...libraryActions, ...searchActions, ...upcomingActions, ...detailActions, ...episodeActions, ...listActions, ...settingsActions, ...collezioneActions, ...newsActions,
   back: () => back(),
 };
 const INPUTS = { ...libraryInputs, ...searchInputs };
@@ -208,10 +210,12 @@ window.addEventListener('online', () => flush());
 window.__vdsBooted = true;
 
 // Libreria appena scaricata: avviso delle stagioni nuove con i dati TMDB che ci sono già, poi di nuovo
-// quando sono aggiornati (una stagione uscita oggi arriva di solito da lì).
+// quando sono aggiornati (una stagione uscita oggi arriva di solito da lì). Poi, in sottofondo, le Novità
+// delle Collezioni (js/novita.js).
 function afterPull() {
   checkNewSeasons();
-  refreshMeta().then(checkNewSeasons, checkNewSeasons);
+  const then = () => { checkNewSeasons(); scanNews().catch(() => {}); };
+  refreshMeta().then(then, then);
 }
 
 async function boot() {

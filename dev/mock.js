@@ -222,6 +222,9 @@ function makeMocks(libPath, { animeKeys = new Set(), newSeasons = false } = {}) 
     return route.fulfill({ status: 200, contentType: 'image/svg+xml', body: svg });
   }
 
-  return { github, tmdb, image, files, shas, log, lib };
+  // Novità in Home (js/novita.js): ogni titolo della libreria segnato come appena controllato, così il giro in
+  // sottofondo non fa richieste che le prove non si aspettano (da mettere in vds.news.scan)
+  const newsScanned = () => Object.fromEntries(Object.keys(lib.items).map((k) => [k, Date.now()]));
+  return { github, tmdb, image, files, shas, log, lib, newsScanned };
 }
 module.exports = { makeMocks };

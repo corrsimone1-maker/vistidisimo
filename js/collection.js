@@ -5,7 +5,7 @@
 // - titolo, locandina e data dei titoli collegati che non sono in libreria (da TMDB);
 // - collegamenti fatti a mano (`links` dell'item) e collegamenti automatici nascosti (`nolinks`), in
 //   tutte e due le direzioni.
-import { LS, item, metaOf, lib } from './store.js';
+import { LS, S, item, metaOf, lib } from './store.js';
 import { tm, tmdbToken, nonLatin, pool } from './tmdb.js';
 import { isAnime, isAnimeResult } from './derive.js';
 
@@ -106,7 +106,7 @@ export async function fetchByTitle(key, names, lang) {
   const all = ttCache();
   all[key] = { k: keys, lo, at: Date.now() };
   const ks = Object.keys(all);
-  if (ks.length > 400) ks.sort((a, b) => all[a].at - all[b].at).slice(0, ks.length - 400).forEach((x) => delete all[x]);
+  if (ks.length > 900) ks.sort((a, b) => all[a].at - all[b].at).slice(0, ks.length - 900).forEach((x) => delete all[x]);
   LS.set('vds.col.tt', all);
   return { k: keys, lo };
 }
@@ -211,6 +211,11 @@ export function cachedByCast(key) {
   if (c.v !== CAST_VER) return { k: [], w: [], stale: true };
   return { k: c.k || [], w: c.w || [], stale: Date.now() - (c.at || 0) > CAST_TTL };
 }
+// da quanto tempo (ms) sono stati cercati gli stessi personaggi di `key` (Infinity se mai, o con regole vecchie)
+export function castAge(key) {
+  const c = castCache()[key];
+  return c && c.v === CAST_VER ? Date.now() - (c.at || 0) : Infinity;
+}
 const people = new Map(); // id attore -> Promise dei suoi ruoli (per la sessione)
 const rolesOf = (pid) => {
   if (!people.has(pid)) people.set(pid, tm(`/person/${pid}/combined_credits`).then((d) => d?.cast || []).catch(() => { people.delete(pid); return []; }));
@@ -283,7 +288,7 @@ export async function fetchByCast(key, x = {}) {
   const all = castCache();
   all[key] = { k: keys, w: weak, at: Date.now(), v: CAST_VER };
   const ks = Object.keys(all);
-  if (ks.length > 400) ks.sort((a, b) => all[a].at - all[b].at).slice(0, ks.length - 400).forEach((x) => delete all[x]);
+  if (ks.length > 900) ks.sort((a, b) => all[a].at - all[b].at).slice(0, ks.length - 900).forEach((x) => delete all[x]);
   LS.set('vds.col.cast', all);
   return { k: keys, w: weak };
 }
@@ -301,7 +306,7 @@ function saveMini() {
   miniTimer = setTimeout(() => {
     const all = miniCache();
     const ks = Object.keys(all);
-    if (ks.length > 1500) ks.sort((a, b) => all[a].at - all[b].at).slice(0, ks.length - 1500).forEach((k) => delete all[k]);
+    if (ks.length > 2500) ks.sort((a, b) => all[a].at - all[b].at).slice(0, ks.length - 2500).forEach((k) => delete all[k]);
     LS.set('vds.col.tm', all);
   }, 400);
 }
@@ -374,17 +379,41 @@ export function ensureMini(keys, done) {
   }).finally(done);
 }
 
+// Come ensureMini, ma con una promessa che si risolve quando sono arrivati (subito se non manca niente):
+// per le Novità in Home (js/novita.js), che li chiede in sottofondo.
+export function ensureMiniAsync(keys) {
+  return new Promise((resolve) => {
+    const now = Date.now();
+    const need = keys.some((k) => {
+      if (asking.has(k) || item(k) || metaOf(k)) return false;
+      const c = miniCache()[k];
+      return !c || now - c.at > MINI_TTL || (k.startsWith('movie:') && !c.gone && c.co === undefined);
+    });
+    if (!need || !tmdbToken()) { resolve(); return; }
+    ensureMini(keys, resolve);
+  });
+}
+
 // ---------- collegamenti a mano ----------
 // `links` = titoli collegati a mano, `nolinks` = collegamenti automatici nascosti. Valgono in tutte e due
 // le direzioni: se «A» ha «B» in links, «B» mostra «A».
+// chi ha `key` nei suoi links / nolinks: { links: Map(key -> [chiavi]), nolinks: … }, rifatto quando la
+// libreria cambia (le Novità in Home lo chiedono per ogni titolo guardato)
+let back = { rev: -1, lib: null, links: new Map(), nolinks: new Map() };
+function backLinks() {
+  if (back.rev === S.rev && back.lib === lib()) return back;
+  back = { rev: S.rev, lib: lib(), links: new Map(), nolinks: new Map() };
+  for (const [k, it] of Object.entries(lib()?.items || {})) {
+    for (const f of ['links', 'nolinks']) for (const o of it[f] || []) { if (!back[f].has(o)) back[f].set(o, []); back[f].get(o).push(k); }
+  }
+  return back;
+}
 export function manualOf(key) {
   const add = new Set(item(key)?.links || []);
   const hide = new Set(item(key)?.nolinks || []);
-  for (const [k, it] of Object.entries(lib()?.items || {})) {
-    if (k === key) continue;
-    if (it.links?.includes(key)) add.add(k);
-    if (it.nolinks?.includes(key)) hide.add(k);
-  }
+  const b = backLinks();
+  for (const k of b.links.get(key) || []) if (k !== key) add.add(k);
+  for (const k of b.nolinks.get(key) || []) if (k !== key) hide.add(k);
   for (const k of hide) add.delete(k);
   add.delete(key);
   return { add, hide };

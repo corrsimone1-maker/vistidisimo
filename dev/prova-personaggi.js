@@ -11,8 +11,8 @@
 //   con «Narration» fatto di passaggio), né un anime che Wikidata dà come seguito (fascia oraria) senza nessuna
 //   conferma; entra un seguito di Wikidata confermato da un personaggio, entra Jujutsu Kaisen 0 (Satoru Gojo) con
 //   la sua saga;
-// - Tokyo Ghoul: niente film dal vero (né dal nome, né da Wikidata, né dalla loro saga); Jack sì, e Pinto (in
-//   libreria ma con pochi voti e senza ancora i dati di TMDB) sì;
+// - Tokyo Ghoul: niente film dal vero (né dal nome, né da Wikidata, né dalla loro saga); Jack sì (Pinto, che
+//   c'era fino al 4/11/2026, ora è lo speciale S0E2 della serie e non sta più in libreria);
 // - il film dal vero vede la sua saga ma non l'anime; vecchie copie sul telefono con le regole larghe non
 //   mostrano più niente di non confermato.
 const { chromium } = require('playwright');
@@ -148,7 +148,8 @@ const PEOPLE = {
     }
     return M.tmdb(route);
   });
-  await ctx.addInitScript(() => { if (!localStorage.getItem('vds.ghToken')) { localStorage.setItem('vds.ghToken', 'x'); localStorage.setItem('vds.tmdbToken', 'y'); } });
+  // le Novità in Home non fanno il loro giro: qui si contano le richieste di cast
+  await ctx.addInitScript((sc) => { if (!localStorage.getItem('vds.ghToken')) { localStorage.setItem('vds.ghToken', 'x'); localStorage.setItem('vds.tmdbToken', 'y'); localStorage.setItem('vds.news.scan', JSON.stringify(sc)); } }, M.newsScanned());
   const page = await ctx.newPage();
   page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
   page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push('console: ' + m.text()); });
@@ -233,7 +234,7 @@ const PEOPLE = {
   k = await rowKeys();
   console.log('     Tokyo Ghoul:', k.join(', '));
   check('Tokyo Ghoul: niente film dal vero (dal nome, da Wikidata, dalla loro saga)', !k.includes('movie:99433422') && !k.includes('movie:99572154'));
-  check('Tokyo Ghoul: Jack e Pinto (Pinto in libreria, pochi voti, senza dati di TMDB)', k.includes('movie:483685') && k.includes('movie:483686'));
+  check('Tokyo Ghoul: Jack', k.includes('movie:483685'));
   check('Tokyo Ghoul: niente film per adulti', !k.includes('movie:99000001'));
   await page.$eval('.d-fr', (e) => e.scrollIntoView({ block: 'center' }));
   await page.screenshot({ path: path.join(OUT, 'pg-4-tokyo-ghoul.png') });

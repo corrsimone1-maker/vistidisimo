@@ -333,14 +333,16 @@ export async function fetchFranchise(key, m, fallbackTitle, onPartial) {
 }
 
 // ---- cache per serie ----
+let frMem = null;
+const frCache = () => (frMem ||= LS.get('vds.mal.fr', {}) || {});
 export function cachedFranchise(key) {
-  const all = LS.get('vds.mal.fr', {}) || {};
+  const all = frCache();
   const v = all[key];
   // una copia di una versione precedente si mostra, ma si riscarica subito
   return v ? { ...v, stale: v.v !== FR_VER || Date.now() - (v.at || 0) > FR_TTL } : null;
 }
 export function saveFranchise(key, v) {
-  const all = LS.get('vds.mal.fr', {}) || {};
+  const all = frCache();
   all[key] = v;
   // tiene le 60 serie aperte più di recente
   const keys = Object.keys(all).sort((a, b) => (all[b].at || 0) - (all[a].at || 0));

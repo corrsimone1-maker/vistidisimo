@@ -25,6 +25,7 @@ export const S = {
   loaded: false,
   lastFetch: 0,
   lastSaved: null,
+  rev: 0, // cresce a ogni cambiamento della libreria (che si modifica sul posto): per chi tiene dei calcoli
 };
 
 const subs = new Set();
@@ -104,6 +105,15 @@ function applyOp(doc, op) {
       // (o riceverne una vecchia da un altro dispositivo) non fa riapparire un avviso.
       if (it && op.n > (it.announced || 0)) it.announced = op.n;
       break;
+    case 'news': {
+      // Novità in Home (js/novita.js): titoli tolti con la × (`newsOff`, in cima a library.json). off/on:
+      // togliere quello che è già tolto o rimettere quello che c'è non cambia niente.
+      const cur = new Set(doc.newsOff || []);
+      for (const k of op.off || []) cur.add(k);
+      for (const k of op.on || []) cur.delete(k);
+      if (cur.size) doc.newsOff = [...cur]; else delete doc.newsOff;
+      break;
+    }
     case 'link': {
       // Collezione: titoli collegati a mano (`links`) e collegamenti automatici nascosti (`nolinks`).
       // add/rm/hide/show: aggiungere quello che c'è già o togliere quello che non c'è non cambia niente,
@@ -155,12 +165,14 @@ function materialize() {
   const doc = structuredClone(S.base || { v: 1, items: {}, lists: [] });
   for (const op of S.ops) applyOp(doc, op);
   S.lib = doc;
+  S.rev += 1;
 }
 
 export function dispatch(...ops) {
   const list = ops.flat().filter(Boolean);
   if (!list.length) return;
   for (const op of list) { op.ts = Date.now(); S.ops.push(op); applyOp(S.lib, op); }
+  S.rev += 1;
   LS.set('vds.ops', S.ops);
   notify();
   scheduleFlush();

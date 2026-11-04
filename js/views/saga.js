@@ -21,19 +21,32 @@ function remember(s) {
 
 // La saga dalla memoria, dal telefono o da TMDB (che poi ridisegna; `done` per chi la chiede da un'altra
 // schermata, come la Collezione). Una copia vecchia si mostra subito e intanto si riscarica.
+const waiting = new Map(); // id -> [done] di chi aspetta la saga che si sta scaricando
 export function getSaga(id, { fetch = true, done } = {}) {
   const v = mem.get(id);
   if (v && v !== 'loading') return v;
   const s = saved()[id];
   const fresh = s && Date.now() - (s.at || 0) < TTL;
-  if (fetch && !fresh && v !== 'loading' && tmdbToken()) {
-    mem.set(id, 'loading');
-    fetchCollection(id)
-      .then((d) => { if (d) { remember(d); mem.set(id, d); } else mem.set(id, s || { err: 'TMDB non conosce questa saga.' }); repaint(); done?.(); })
-      .catch((e) => { mem.set(id, s || { err: e.message }); repaint(); done?.(); });
+  if (fetch && !fresh && tmdbToken()) {
+    if (done) { if (!waiting.has(id)) waiting.set(id, []); waiting.get(id).push(done); }
+    if (v !== 'loading') {
+      mem.set(id, 'loading');
+      const finish = () => { repaint(); const ws = waiting.get(id) || []; waiting.delete(id); ws.forEach((f) => f()); };
+      fetchCollection(id)
+        .then((d) => { if (d) { remember(d); mem.set(id, d); } else mem.set(id, s || { err: 'TMDB non conosce questa saga.' }); finish(); })
+        .catch((e) => { mem.set(id, s || { err: e.message }); finish(); });
+    }
   }
   if (s) { if (fresh) mem.set(id, s); return s; }
   return null;
+}
+// La saga aggiornata, con una promessa (subito se la copia sul telefono è fresca): per le Novità in Home.
+export function loadSaga(id) {
+  return new Promise((resolve) => {
+    let ok = false;
+    getSaga(id, { done: () => { ok = true; resolve(); } });
+    if (!ok && !waiting.get(id)?.length) resolve();
+  });
 }
 
 const released = (f, t) => !!f.d && f.d <= t;

@@ -2,6 +2,7 @@ import { html, icon, img } from '../ui.js';
 import { lib, metaOf, S } from '../store.js';
 import { stats, splitTime, listProgress, listOrder, byLast, hasWatched } from '../derive.js';
 import { cardFor, syncDot, metaBanner, syncBanner } from './common.js';
+import { newsRow } from '../novita.js';
 
 function timeValue(min) {
   const { months, days, hours } = splitTime(min);
@@ -54,6 +55,7 @@ export function renderHome() {
   </header>
   ${syncBanner()}
   ${metaBanner()}
+  ${newsRow()}
   <section class="stats" aria-label="Statistiche">
     <div class="stat"><span class="stat-l">Tempo davanti alle serie</span><span class="stat-v">${metaReady ? timeValue(st.tvMin) : '…'}</span></div>
     <div class="stat"><span class="stat-l">Episodi visti</span><span class="stat-v"><b>${st.epCount.toLocaleString('it-IT')}</b></span></div>
