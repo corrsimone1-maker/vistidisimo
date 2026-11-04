@@ -718,6 +718,9 @@ p.rp-ov { margin: 8px 0 0; font-size: 13.5px; }
 }
 .pz-time::placeholder { color: var(--testo-3); opacity: .5; text-shadow: none; }
 
+/* immagine non arrivata (main.js): niente icona rotta, resta lo sfondo finché non si riprova */
+img.img-off { visibility: hidden; }
+
 /* ---------- Novità delle Collezioni (Home e #/novita) ---------- */
 .nv-row { grid-auto-columns: min(292px, calc(100vw - 2 * var(--gut) - 34px)); }
 .nv {

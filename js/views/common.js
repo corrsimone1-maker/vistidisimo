@@ -66,6 +66,8 @@ export function backButton() {
 
 export function syncBanner() {
   if (S.sync.state !== 'error') return '';
+  // rete: niente da fare in Impostazioni, l'app riprova da sola (main.js)
+  if (S.sync.net) return html`<div class="banner bad"><span>${S.sync.msg}</span></div>`;
   return html`<a class="banner bad" href="#/impostazioni"><span>${S.sync.msg}</span><b>Apri Impostazioni</b></a>`;
 }
 

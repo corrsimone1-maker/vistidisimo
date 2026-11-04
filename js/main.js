@@ -187,12 +187,27 @@ document.addEventListener('submit', (ev) => {
 // carica si prova l'altra, una volta sola. Così niente codice scritto dentro l'HTML con indirizzi da TMDB.
 document.addEventListener('error', (ev) => {
   const t = ev.target;
-  if (t instanceof HTMLImageElement && t.dataset.fallback) {
+  if (!(t instanceof HTMLImageElement)) return;
+  if (t.dataset.fallback) {
     const f = t.dataset.fallback;
     delete t.dataset.fallback;
     t.src = f;
+    return;
   }
+  // immagine non arrivata (rete assente o lenta): niente icona rotta di Safari, resta lo sfondo; si riprova
+  // quando la rete torna (retryImages)
+  t.classList.add('img-off');
 }, true);
+
+// Le immagini non arrivate si richiedono di nuovo.
+function retryImages() {
+  for (const img of document.querySelectorAll('img.img-off')) {
+    const s = img.getAttribute('src');
+    img.classList.remove('img-off');
+    img.removeAttribute('src');
+    if (s) img.setAttribute('src', s);
+  }
+}
 
 // Niente zoom: iOS ignora in parte user-scalable=no, quindi si bloccano anche i gesti di pizzico.
 ['gesturestart', 'gesturechange', 'gestureend'].forEach((t) => document.addEventListener(t, (e) => e.preventDefault(), { passive: false }));
@@ -201,11 +216,39 @@ document.addEventListener('touchmove', (e) => { if (e.touches.length > 1) e.prev
 window.addEventListener('hashchange', onHash);
 initReorder();
 subscribe(scheduleRerender);
+// Rete che non risponde (4/11/2026: all'apertura «Load failed» su GitHub e tutte le locandine rotte, e restava
+// così finché non riaprivi l'app; di solito il Wi-Fi si sta ancora collegando o il telefono ha cambiato rete):
+// si riprova da soli, prima presto e poi più di rado finché l'app è aperta, subito quando il telefono dice che
+// la rete è tornata e a ogni ritorno nell'app. Riuscito il caricamento, si richiedono anche le immagini.
+const RETRY_S = [3, 8, 20, 45, 90];
+let retryTimer = null;
+let retryN = 0;
+let pulling = null;
+function pullNow() {
+  if (!pulling) pulling = pull().finally(() => { pulling = null; });
+  return pulling;
+}
+async function retryNow() {
+  clearTimeout(retryTimer);
+  if (!hasGhToken()) return;
+  const ok = await pullNow();
+  if (ok) { retryN = 0; rerender(); retryImages(); afterPull(); } else scheduleRetry();
+}
+function scheduleRetry() {
+  clearTimeout(retryTimer);
+  if (!S.sync.net || document.visibilityState === 'hidden') return;
+  retryTimer = setTimeout(retryNow, RETRY_S[Math.min(retryN, RETRY_S.length - 1)] * 1000);
+  retryN += 1;
+}
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') { flush(); saveMeta(); return; }
-  if (hasGhToken() && Date.now() - S.lastFetch > 60000) pull().then((ok) => { if (ok) afterPull(); });
+  if (document.visibilityState === 'hidden') { clearTimeout(retryTimer); flush(); saveMeta(); return; }
+  retryImages();
+  if (hasGhToken() && (S.sync.net || Date.now() - S.lastFetch > 60000)) { retryN = 0; retryNow(); }
 });
-window.addEventListener('online', () => flush());
+window.addEventListener('online', () => {
+  retryImages();
+  if (S.sync.net) { retryN = 0; retryNow(); } else flush();
+});
 
 window.__vdsBooted = true;
 
@@ -222,9 +265,9 @@ async function boot() {
   loadCache();
   renderRoute();
   if (!hasGhToken()) return;
-  const ok = await pull();
+  const ok = await pullNow();
   rerender();
-  if (ok) afterPull();
+  if (ok) afterPull(); else scheduleRetry();
 }
 boot();
 

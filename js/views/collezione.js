@@ -121,6 +121,9 @@ function compute(key, x, src, { fetch }) {
     const mi = miniOf(e.key);
     if (mi?.gone) { out.delete(id); continue; }
     if (e.self) { Object.assign(e, { t: e.t || x.t || mi?.t, d: e.d || mi?.d || x.d || '', p: e.p || mi?.p, a: anime }); continue; }
+    // famiglia di Wikidata non confermata: solo tra anime, quindi per un titolo che non lo è esce subito
+    // (senza chiedere a TMDB i dati di decine di adattamenti, parodie e rifacimenti)
+    if (e.onlyAnime && !anime && !e.manual) { out.delete(id); continue; }
     if (!mi && !e.t) { missing.push(e.key); out.delete(id); continue; }
     if (!fits(e, mi || { a: e.a })) { out.delete(id); continue; }
     for (const f of ['t', 'p', 'd', 'a']) if ((e[f] == null || e[f] === '') && mi?.[f] != null) e[f] = mi[f];

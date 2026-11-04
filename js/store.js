@@ -197,7 +197,8 @@ function commitMessage(ops) {
   return `${msgs.slice(0, 2).join('; ')} e altre ${msgs.length - 2} modifiche`;
 }
 
-function setSync(state, msg = '') { S.sync = { state, msg }; notify(); }
+// net: errore di rete (GitHub non raggiungibile), che main.js riprova da solo; gli altri (token) no
+function setSync(state, msg = '', extra = {}) { S.sync = { state, msg, ...extra }; notify(); }
 
 export async function flush() {
   clearTimeout(flushTimer);
@@ -234,7 +235,7 @@ export async function flush() {
     setSync(S.ops.length ? 'saving' : 'idle');
   } catch (e) {
     console.error(e);
-    setSync('error', e.auth ? 'Il token GitHub non funziona più (forse è scaduto). Le modifiche restano su questo dispositivo: incolla un token nuovo in Impostazioni e partono da sole.' : `Salvataggio non riuscito (${e.message}). Le modifiche restano su questo dispositivo e riprovo tra poco.`);
+    setSync('error', e.auth ? 'Il token GitHub non funziona più (forse è scaduto). Le modifiche restano su questo dispositivo: incolla un token nuovo in Impostazioni e partono da sole.' : `Salvataggio non riuscito (${e.message}). Le modifiche restano su questo dispositivo e riprovo tra poco.`, { net: !e.auth });
     if (!e.auth) scheduleFlush(20000);
   } finally {
     flushing = false;
@@ -285,7 +286,7 @@ export async function pull() {
   } catch (e) {
     console.error(e);
     S.loaded = !!S.base;
-    setSync('error', e.auth ? 'Il token GitHub non funziona più (forse è scaduto). Incolla un token nuovo in Impostazioni: i dati sono al sicuro nella repo.' : `Non riesco a raggiungere GitHub (${e.message}). Ti mostro l’ultima copia salvata su questo dispositivo.`);
+    setSync('error', e.auth ? 'Il token GitHub non funziona più (forse è scaduto). Incolla un token nuovo in Impostazioni: i dati sono al sicuro nella repo.' : `Non riesco a raggiungere GitHub (${e.message}). Ti mostro l’ultima copia salvata su questo dispositivo e riprovo da solo.`, { net: !e.auth });
     return false;
   }
 }

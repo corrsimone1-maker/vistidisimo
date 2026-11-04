@@ -27,6 +27,7 @@ import { titleOf } from './views/common.js';
 export const NEWS_DAYS = 365; // quanto indietro: uscito nell'ultimo anno (o in uscita)
 const DAY = 24 * 3600 * 1000;
 const SCAN_TTL = 7 * DAY; // ogni titolo si ricontrolla dopo una settimana
+const RETRY_AFTER = 6 * 3600 * 1000; // se qualcosa non ha risposto, dopo 6 ore
 const CAST_SCAN_TTL = 30 * DAY; // gli stessi personaggi al massimo una volta al mese
 const PER_RUN = 12; // titoli per apertura dell'app
 const CAST_PER_RUN = 3; // di questi, quanti anche con gli stessi personaggi
@@ -91,16 +92,19 @@ export async function scanNews({ perRun = PER_RUN, castPerRun = CAST_PER_RUN } =
       .slice(0, perRun);
     let castLeft = castPerRun;
     for (const k of todo) {
-      if (document.visibilityState === 'hidden') break;
+      // app in background, rete assente o GitHub non raggiungibile: si riprende alla prossima apertura
+      if (document.visibilityState === 'hidden' || navigator.onLine === false || S.sync.net) break;
       const x = xFromMeta(k);
       if (!x) continue;
+      let ok = true;
+      const soft = (p) => p.catch(() => { ok = false; return null; });
       const wd = cachedWiki(k);
-      if (!wd || wd.stale) await fetchWiki(k).catch(() => null);
+      if (!wd || wd.stale) await soft(fetchWiki(k));
       const tt = cachedByTitle(k);
-      if ((!tt || tt.stale) && (x.t || x.ot)) await fetchByTitle(k, [x.ot, x.t], x.l).catch(() => null);
+      if ((!tt || tt.stale) && (x.t || x.ot)) await soft(fetchByTitle(k, [x.ot, x.t], x.l));
       if (castLeft > 0 && castAge(k) > CAST_SCAN_TTL) {
         castLeft -= 1;
-        await fetchByCast(k, { t: x.t, ot: x.ot, l: x.l, anime: !!x.anime }).catch(() => null);
+        await soft(fetchByCast(k, { t: x.t, ot: x.ot, l: x.l, anime: !!x.anime }));
       }
       // la saga del film, poi i dati dei collegati e le saghe dei film collegati (che si sanno coi loro dati)
       if (Array.isArray(x.co)) await loadSaga(x.co[0]);
@@ -111,7 +115,10 @@ export async function scanNews({ perRun = PER_RUN, castPerRun = CAST_PER_RUN } =
         await ensureMiniAsync(keys);
         for (const id of r.sagaPending) await loadSaga(id);
       }
-      times[k] = Date.now();
+      const r = cachedCollection(k, x);
+      if (r.missing.length || r.sagaPending.length) ok = false;
+      // non riuscito del tutto (Wikidata o TMDB che non rispondono): si riprova fra 6 ore, non fra una settimana
+      times[k] = ok ? Date.now() : Date.now() - SCAN_TTL + RETRY_AFTER;
       LS.set('vds.news.scan', times);
       ver += 1;
       notify();

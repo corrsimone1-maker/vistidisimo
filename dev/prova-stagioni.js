@@ -11,7 +11,8 @@ const DATA = path.join(ROOT, 'vistidisimo-dati');
 const OUT = process.argv[2] || require('os').tmpdir();
 
 const pad = (n) => String(n).padStart(2, '0');
-const day = (off) => { const d = new Date(Date.now() + off * 86400000); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+// giorni di calendario (non 24 h × n: dopo il cambio dell'ora, tra le 23 e mezzanotte, 31 × 24 h erano solo 30 giorni)
+const day = (off) => { const d = new Date(); d.setDate(d.getDate() + off); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
 
 // Tre serie vere della libreria (in pari, completata, in corso) a cui si dà una stagione nuova.
 function pick(lib) {

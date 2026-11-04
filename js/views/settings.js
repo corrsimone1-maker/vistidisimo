@@ -5,7 +5,7 @@ import { OWNER, DATA_REPO, BACKUP_REPO, serialize } from '../github.js';
 import { watchedCount, isAnime } from '../derive.js';
 import { letterboxdCsv, simklCsv, ensureTvIds, tvIdsMissing, exportName } from '../export.js';
 
-export const VERSION = '37';
+export const VERSION = '38';
 let busy = false;
 let note = '';
 let simklJob = null; // { done, total } mentre prepara il file per Simkl
