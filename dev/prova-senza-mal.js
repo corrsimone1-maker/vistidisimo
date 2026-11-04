@@ -6,6 +6,7 @@
 // - errori di battitura: «shingeki no kiojin» e «l'attaco dei giganti» trovano la serie (nuova ricerca con le
 //   parole più lunghe);
 // - pagina di un anime: romaji dai titoli alternativi di TMDB, Collezione senza «Cerco…» infinito;
+// - Home: nelle righe Serie e Film (e nelle loro pagine «Tutte») solo quello che hai guardato;
 // - rivisioni: Madoka (vista 2 volte) ha la stagione «×2», il tasto della serie «×2» e la stagione finita
 //   col rettangolo diverso.
 const { chromium } = require('playwright');
@@ -90,6 +91,21 @@ const ALT = {
   await page.goto(base + '#/home');
   await page.waitForSelector('#view .pc', { timeout: 15000 });
   await page.waitForTimeout(1500);
+
+  // ---- Home: nelle righe Serie e Film solo quello che hai guardato (4/11/2026) ----
+  const homeCheck = await page.evaluate(async () => {
+    const s = await import('./js/store.js'); const D = await import('./js/derive.js');
+    const keys = (sel) => [...document.querySelectorAll(`${sel} a.pc`)].map((a) => a.dataset.key);
+    const rowS = keys('[data-scroll=h-serie]'); const rowF = keys('[data-scroll=h-film]');
+    const bad = [...rowS, ...rowF].filter((k) => !D.hasWatched(s.item(k)));
+    const planned = Object.entries(s.lib().items).filter(([, it]) => it.type === 'tv' && !D.hasWatched(it)).length;
+    return { n: rowS.length + rowF.length, bad, planned };
+  });
+  check(`Home: ${homeCheck.n} locandine nelle righe Serie/Film, nessuna mai guardata (in libreria ${homeCheck.planned} serie mai iniziate)`, homeCheck.n > 0 && homeCheck.bad.length === 0 && homeCheck.planned > 0);
+  await page.goto(base + '#/raccolta/serie');
+  await page.waitForSelector('.grid .pc');
+  const allBad = await page.evaluate(async () => { const s = await import('./js/store.js'); const D = await import('./js/derive.js'); return [...document.querySelectorAll('.grid a.pc')].filter((a) => !D.hasWatched(s.item(a.dataset.key))).length; });
+  check('e così la pagina «Tutte» delle serie', allBad === 0);
 
   // ---- Cerca ----
   await page.goto(base + '#/cerca');

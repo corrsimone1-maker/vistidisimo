@@ -40,7 +40,20 @@ const VIS = [
   { ...R('tv', 97951, "Vis a vis: L'oasi", '2020-04-20', 20, 120, true, 'es'), original_name: 'Vis a vis: El oasis' },
   { ...R('movie', 700010, 'Vis-à-vis', '2012-01-01', 3, 40, true, 'fr') },
 ];
+// Madoka: la serie trova il film «Parte 3» per il nome; il film porta la saga (Parte 1, 2, 3, Walpurgis)
+const MADOKA = [
+  { ...R('tv', 39218, 'Puella Magi Madoka Magica', '2011-01-07', 80, 1500, true, 'ja'), original_name: '魔法少女まどか☆マギカ' },
+  { ...R('movie', 212162, 'Puella Magi Madoka Magica: Parte 3 - La storia della ribellione', '2013-10-26', 20, 400, true, 'ja'), original_title: '劇場版 魔法少女まどか☆マギカ[新編]叛逆の物語' },
+];
+const MADOKA_SAGA = { id: 212166, name: 'Puella Magi Madoka Magica - Collezione', parts: [
+  { id: 212164, title: 'Puella Magi Madoka Magica: Parte 1 - Inizio', release_date: '2012-10-06', poster_path: '/p_movie_212164.jpg', genre_ids: [16], original_language: 'ja' },
+  { id: 212165, title: 'Puella Magi Madoka Magica: Parte 2 - Storia infinita', release_date: '2012-10-13', poster_path: '/p_movie_212165.jpg', genre_ids: [16], original_language: 'ja' },
+  { id: 212162, title: 'Puella Magi Madoka Magica: Parte 3 - La storia della ribellione', release_date: '2013-10-26', poster_path: '/p_movie_212162.jpg', genre_ids: [16], original_language: 'ja' },
+  { id: 822653, title: 'Puella Magi Madoka Magica the Movie - Il risveglio di Walpurgis', release_date: '2026-08-28', poster_path: '/p_movie_822653.jpg', genre_ids: [16], original_language: 'ja' },
+] };
 const DETAILS = {
+  'tv:39218': { name: 'Puella Magi Madoka Magica', original_name: '魔法少女まどか☆マギカ', first_air_date: '2011-01-07', original_language: 'ja', origin_country: ['JP'] },
+  'movie:212162': { title: 'Puella Magi Madoka Magica: Parte 3 - La storia della ribellione', original_title: '劇場版 魔法少女まどか☆マギカ[新編]叛逆の物語', release_date: '2013-10-26', original_language: 'ja', origin_country: ['JP'], belongs_to_collection: { id: 212166, name: 'Puella Magi Madoka Magica - Collezione' } },
   'tv:113036': { name: 'La casa di carta: Corea', original_name: '종이의 집: 공동경제구역', first_air_date: '2022-06-24', original_language: 'ko', origin_country: ['KR'] },
   'tv:71446': { name: 'La casa di carta', original_name: 'La casa de papel', first_air_date: '2017-05-02', original_language: 'es', origin_country: ['ES'] },
   'tv:146176': { name: 'Berlino e i gioielli di Parigi', original_name: 'Berlín', first_air_date: '2023-12-29', original_language: 'es', origin_country: ['ES'] },
@@ -83,8 +96,10 @@ const DETAILS = {
       if (u.searchParams.get('page') === '2') return ok(route, { results: [] });
       if (q === 'berlino' || q === 'berlín' || q === 'berlin') return ok(route, { results: BERLINO });
       if (q.startsWith('vis a vis')) return ok(route, { results: VIS });
+      if (q === 'puella magi madoka magica') return ok(route, { results: MADOKA });
       return ok(route, { results: [] });
     }
+    if (p === '/collection/212166') return ok(route, MADOKA_SAGA);
     const m = p.match(/^\/(tv|movie)\/(\d+)$/);
     if (m && DETAILS[`${m[1]}:${m[2]}`]) {
       const extra = DETAILS[`${m[1]}:${m[2]}`];
@@ -230,6 +245,21 @@ const DETAILS = {
   await flush();
   check('su GitHub niente più nolinks', savedLib().items['tv:146176'].nolinks == null);
   check('niente esce dallo schermo', await noOverflow());
+
+  // ---- Madoka: la serie e il film hanno la stessa collezione (la saga del film entra tutta) ----
+  const colOf = async (hash) => {
+    await page.goto(base + hash);
+    await page.waitForSelector('.d-fr .pc', { timeout: 10000 });
+    await page.waitForFunction(() => document.querySelectorAll('.d-fr .pc').length >= 5, null, { timeout: 8000 }).catch(() => {});
+    return rowTitles();
+  };
+  const mS = await colOf('#/t/tv/39218');
+  const mF = await colOf('#/t/movie/212162');
+  console.log('    serie:', mS.join(' | '));
+  console.log('    film: ', mF.join(' | '));
+  check(`Madoka: serie e film con la stessa collezione (${mS.length} e ${mF.length})`, mS.length === 5 && mS.join('|') === mF.join('|') && mS.some((t) => /Walpurgis/.test(t)));
+  await page.$eval('.d-fr', (e) => e.scrollIntoView({ block: 'center' }));
+  await shot('7-madoka-film');
 
   // ---- Cerca «berlino» ----
   await page.goto(base + '#/cerca');

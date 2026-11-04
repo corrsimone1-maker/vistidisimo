@@ -310,3 +310,7 @@ export function listProgress(list, items, metaOf) {
 }
 
 export const byLast = (a, b) => (b.it.last || '').localeCompare(a.it.last || '');
+// Hai visto almeno qualcosa: un episodio (anche speciale) di una serie, o il film. Le righe «Serie» e «Film»
+// della Home (e le loro pagine «Tutte») mostrano solo questi: quello appena messo in «da guardare» no
+// (chiesto da Simo il 4/11/2026).
+export const hasWatched = (it) => (it?.type === 'tv' ? Object.values(it.eps || {}).some((s) => Object.keys(s || {}).length > 0) : it?.status === 'completed');

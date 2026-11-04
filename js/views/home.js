@@ -1,6 +1,6 @@
 import { html, icon, img } from '../ui.js';
 import { lib, metaOf, S } from '../store.js';
-import { stats, splitTime, listProgress, listOrder, byLast } from '../derive.js';
+import { stats, splitTime, listProgress, listOrder, byLast, hasWatched } from '../derive.js';
 import { cardFor, syncDot, metaBanner, syncBanner } from './common.js';
 
 function timeValue(min) {
@@ -38,8 +38,9 @@ export function listCard(l, items) {
 export function renderHome() {
   const L = lib();
   const entries = Object.entries(L?.items || {}).map(([k, it]) => ({ k, it }));
-  const series = entries.filter((x) => x.it.type === 'tv').sort(byLast);
-  const films = entries.filter((x) => x.it.type === 'movie').sort(byLast);
+  // solo quello che hai guardato, dall'ultima attività (non quello appena messo in «da guardare»)
+  const series = entries.filter((x) => x.it.type === 'tv' && hasWatched(x.it)).sort(byLast);
+  const films = entries.filter((x) => x.it.type === 'movie' && hasWatched(x.it)).sort(byLast);
   const byFav = (a, b) => (b.it.fav || '').localeCompare(a.it.fav || '');
   const favS = entries.filter((x) => x.it.fav && x.it.type === 'tv').sort(byFav);
   const favF = entries.filter((x) => x.it.fav && x.it.type === 'movie').sort(byFav);
@@ -73,8 +74,8 @@ export function renderHome() {
 }
 
 const COLLECTIONS = {
-  serie: { title: 'Serie', filter: (it) => it.type === 'tv', sort: byLast },
-  film: { title: 'Film', filter: (it) => it.type === 'movie', sort: byLast },
+  serie: { title: 'Serie', filter: (it) => it.type === 'tv' && hasWatched(it), sort: byLast },
+  film: { title: 'Film', filter: (it) => it.type === 'movie' && hasWatched(it), sort: byLast },
   'serie-preferite': { title: 'Serie preferite', filter: (it) => it.type === 'tv' && it.fav, sort: (a, b) => (b.it.fav || '').localeCompare(a.it.fav || '') },
   'film-preferiti': { title: 'Film preferiti', filter: (it) => it.type === 'movie' && it.fav, sort: (a, b) => (b.it.fav || '').localeCompare(a.it.fav || '') },
 };

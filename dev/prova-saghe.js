@@ -189,15 +189,16 @@ const malAnime = (id, full) => {
   const ms = metaSaved();
   check(`meta.json su GitHub con la saga (557: ${JSON.stringify(ms['movie:557']?.co)}, 27205: ${JSON.stringify(ms['movie:27205']?.co)})`, JSON.stringify(ms['movie:557']?.co) === JSON.stringify([556, 'Spider-Man - Collezione']) && ms['movie:27205']?.co === 0);
 
-  // 2. pagina del film: la saga nella Collezione (con i film che cominciano con «Spider-Man:») e trailer in
-  //    inglese (in italiano non c'è)
+  // 2. pagina del film: la saga nella Collezione (con i film che cominciano con «Spider-Man:» e, dal 4/11/2026,
+  //    anche la loro saga: dalle due pagine la stessa collezione) e trailer in inglese (in italiano non c'è)
   await page.goto(base + '#/t/movie/557');
   await page.waitForSelector('.facts');
+  await page.waitForFunction(() => document.querySelectorAll('.d-fr .pc').length >= 8, null, { timeout: 8000 }).catch(() => {});
   await page.waitForSelector('.d-fr .pc', { timeout: 8000 }).catch(() => {});
   await page.waitForSelector('.trailer-btn', { timeout: 5000 }).catch(() => {});
   check('niente più il dato «Saga» nella tabella', (await fact('Saga')) == null);
-  check(`riga della collezione: ${await text('.d-fr .row-head')}`, (await text('.d-fr .row-head h2')) === 'Collezione 6/6' && (await text('.d-fr .row-all')) === 'Tutti 6');
-  check(`saga e film con lo stesso nome, in ordine: ${(await texts('.d-fr .pc-title')).join(' → ')}`, (await texts('.d-fr .pc-title')).join('|') === 'Spider-Man|Spider-Man 2|Spider-Man 3|Spider-Man: Homecoming|Spider-Man: Far from Home|Spider-Man: No Way Home');
+  check(`riga della collezione: ${await text('.d-fr .row-head')}`, (await text('.d-fr .row-head h2')) === 'Collezione 6/7' && (await text('.d-fr .row-all')) === 'Tutti 8');
+  check(`saga e film con lo stesso nome, in ordine: ${(await texts('.d-fr .pc-title')).join(' → ')}`, (await texts('.d-fr .pc-title')).join('|') === 'Spider-Man|Spider-Man 2|Spider-Man 3|Spider-Man: Homecoming|Spider-Man: Far from Home|Spider-Man: No Way Home|Spider-Man: Brand New Day|Spider-Man 5 finto');
   check('il film aperto è segnato', await page.$eval('.d-fr .pc.here', (a) => a.getAttribute('href')) === '#/t/movie/557');
   check('la riga scorre in orizzontale', await page.$eval('.d-fr .scroller', (e) => getComputedStyle(e).overflowX === 'auto' || getComputedStyle(e).overflowX === 'scroll'));
   check('niente esce dallo schermo', await noOverflow());
@@ -219,7 +220,7 @@ const malAnime = (id, full) => {
   await page.click('.d-fr .row-all');
   await page.waitForSelector('.person-grid .pc');
   check(`titolo: ${await text('.page-top h1')} · ${await text('.col-of')}`, (await text('.page-top h1')) === 'Collezione' && (await text('.col-of')) === 'Spider-Man');
-  check(`conteggio: ${await text('.person-count')}`, (await text('.person-count')) === '6 visti su 6');
+  check(`conteggio: ${await text('.person-count')}`, (await text('.person-count')) === '6 visti su 7 · 1 in uscita');
   await page.goto(base + '#/saga/531241');
   await page.waitForSelector('.person-grid .pc');
   const order = await texts('.person-grid .pc-title');
@@ -228,8 +229,9 @@ const malAnime = (id, full) => {
   // la stessa saga nella pagina di un suo film: visti su usciti, «Tutti» con tutti i film (e lo Spider-Man del 2002)
   await page.goto(base + '#/t/movie/315635');
   await page.waitForSelector('.d-fr .pc', { timeout: 8000 });
-  check(`collezione con un film in uscita: ${await text('.d-fr .row-head')}`, (await text('.d-fr .fr-count')) === '4/5' && (await text('.d-fr .row-all')) === 'Tutti 6');
-  check(`anni: ${(await texts('.d-fr .pc-year')).join(', ')}`, (await texts('.d-fr .pc-year')).join(',') === 'Film · 2002,Film · 2017,Film · 2019,Film · 2021,Film · 2026,Film · in uscita 2028');
+  await page.waitForFunction(() => document.querySelectorAll('.d-fr .pc').length >= 8, null, { timeout: 8000 }).catch(() => {});
+  check(`collezione con un film in uscita: ${await text('.d-fr .row-head')}`, (await text('.d-fr .fr-count')) === '6/7' && (await text('.d-fr .row-all')) === 'Tutti 8');
+  check(`anni: ${(await texts('.d-fr .pc-year')).join(', ')}`, (await texts('.d-fr .pc-year')).join(',') === 'Film · 2002,Film · 2004,Film · 2007,Film · 2017,Film · 2019,Film · 2021,Film · 2026,Film · in uscita 2028');
   check('niente esce dallo schermo', await noOverflow());
   await page.goto(base + '#/saga/531241');
   await page.waitForSelector('.person-grid .pc');

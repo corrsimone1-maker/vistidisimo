@@ -77,11 +77,15 @@ function build(key, x) {
   };
   add({ key, self: true });
   let sagaLoading = false;
-  if (type === 'movie' && x.co) {
-    const sg = getSaga(x.co[0]);
+  const sagasDone = new Set();
+  const addSaga = (co) => {
+    if (!co || sagasDone.has(co[0]) || sagasDone.size >= 4) return;
+    sagasDone.add(co[0]);
+    const sg = getSaga(co[0], { done: () => repaint() });
     if (!sg) sagaLoading = true;
     else if (!sg.err) for (const f of sg.films) add({ key: `movie:${f.id}`, t: f.t, p: f.p, d: f.d, a: isAnimeResult(f) });
-  }
+  };
+  if (type === 'movie') addSaga(x.co);
   for (const y of s.mal?.data?.items || []) {
     const l = y.l || (y.f === 'TV' ? 'Spin-off' : FORMAT_LABEL[y.f] || y.f);
     if (y.key) add({ key: y.key, t: y.tt || y.t, p: y.tp || y.c, d: y.d, l, a: true });
@@ -91,6 +95,17 @@ function build(key, x) {
   for (const k of [...(s.wd.k || []), ...(s.tt?.k || []), ...man.add]) add({ key: k });
   for (const k of man.add) out.get(k).manual = true;
   for (const k of man.hide) out.delete(k);
+  // la saga di ogni film collegato entra tutta (scelta del 4/11/2026: la serie di Madoka aveva 4 titoli e il
+  // suo film 5, perché il film porta la saga e la serie no): così serie e film vedono la stessa collezione
+  const needCo = [];
+  for (const e of [...out.values()]) {
+    if (!e.key?.startsWith('movie:') || e.self) continue;
+    const mi = miniOf(e.key);
+    if (mi?.co) addSaga(mi.co);
+    else if (mi && mi.co === undefined && !mi.lib && !mi.gone) needCo.push(e.key);
+  }
+  for (const k of man.hide) out.delete(k);
+  if (needCo.length) ensureMini(needCo, () => repaint());
   // titolo, locandina e data di quelli che non li hanno ancora
   const missing = [];
   const list = [];

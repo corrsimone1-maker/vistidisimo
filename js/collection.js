@@ -90,12 +90,18 @@ function saveMini() {
     LS.set('vds.col.tm', all);
   }, 400);
 }
+// co (solo film): saga di TMDB [id, nome], 0 se non ce l'ha, undefined se non si sa (i risultati di una
+// ricerca non lo dicono, i dettagli sì). Serve alla Collezione per prendere tutta la saga di un film collegato.
 export function rememberResult(k, r, en) {
   let t = r.title || r.name || '';
   if (nonLatin(t) && en && !nonLatin(en)) t = en;
+  const old = miniCache()[k];
+  const details = Array.isArray(r.genres);
+  const co = k.startsWith('movie:') ? (details ? (r.belongs_to_collection ? [r.belongs_to_collection.id, r.belongs_to_collection.name || ''] : 0) : old?.co) : undefined;
   miniCache()[k] = {
     t, p: r.poster_path || null, d: r.release_date || r.first_air_date || '',
     a: isAnimeResult({ genre_ids: r.genre_ids || (r.genres || []).map((g) => g.id), original_language: r.original_language, origin_country: r.origin_country }),
+    ...(co !== undefined ? { co } : {}),
     at: Date.now(),
   };
   saveMini();
@@ -108,13 +114,13 @@ function metaDate(type, m) {
   return m.ad || (m.ss || []).filter((s) => s[0] > 0 && s[2]).map((s) => s[2]).sort()[0] || (m.y ? String(m.y) : '');
 }
 
-// { t, p, d, a, lib } oppure null se non si sa ancora
+// { t, p, d, a, co, lib } oppure null se non si sa ancora
 export function miniOf(key) {
   const [type] = key.split(':');
   const it = item(key); const m = metaOf(key);
   if (it || m) {
     const t = (m?.t && !nonLatin(m.t) ? m.t : '') || it?.title || m?.t || '';
-    return { t, p: it?.poster || m?.p || null, d: metaDate(type, m) || (it?.year ? String(it.year) : ''), a: isAnime(it || {}, m), lib: !!it };
+    return { t, p: it?.poster || m?.p || null, d: metaDate(type, m) || (it?.year ? String(it.year) : ''), a: isAnime(it || {}, m), co: m?.co, lib: !!it };
   }
   const c = miniCache()[key];
   if (c && !c.gone) return c;
@@ -122,13 +128,14 @@ export function miniOf(key) {
 }
 
 const asking = new Set();
-// Chiede a TMDB i titoli che mancano (6 alla volta), poi `done()`.
+// Chiede a TMDB i titoli che mancano (6 alla volta), poi `done()`. Anche i film di cui non si sa ancora la
+// saga (arrivati da una ricerca).
 export function ensureMini(keys, done) {
   const now = Date.now();
   const todo = keys.filter((k) => {
     if (asking.has(k) || item(k) || metaOf(k)) return false;
     const c = miniCache()[k];
-    return !c || now - c.at > MINI_TTL;
+    return !c || now - c.at > MINI_TTL || (k.startsWith('movie:') && !c.gone && c.co === undefined);
   });
   if (!todo.length || !tmdbToken()) return;
   todo.forEach((k) => asking.add(k));

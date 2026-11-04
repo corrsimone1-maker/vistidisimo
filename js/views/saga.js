@@ -19,9 +19,9 @@ function remember(s) {
   LS.set('vds.sagas', all);
 }
 
-// La saga dalla memoria, dal telefono o da TMDB (che poi ridisegna). Una copia vecchia si mostra
-// subito e intanto si riscarica.
-export function getSaga(id, { fetch = true } = {}) {
+// La saga dalla memoria, dal telefono o da TMDB (che poi ridisegna; `done` per chi la chiede da un'altra
+// schermata, come la Collezione). Una copia vecchia si mostra subito e intanto si riscarica.
+export function getSaga(id, { fetch = true, done } = {}) {
   const v = mem.get(id);
   if (v && v !== 'loading') return v;
   const s = saved()[id];
@@ -29,8 +29,8 @@ export function getSaga(id, { fetch = true } = {}) {
   if (fetch && !fresh && v !== 'loading' && tmdbToken()) {
     mem.set(id, 'loading');
     fetchCollection(id)
-      .then((d) => { if (d) { remember(d); mem.set(id, d); } else mem.set(id, s || { err: 'TMDB non conosce questa saga.' }); repaint(); })
-      .catch((e) => { mem.set(id, s || { err: e.message }); repaint(); });
+      .then((d) => { if (d) { remember(d); mem.set(id, d); } else mem.set(id, s || { err: 'TMDB non conosce questa saga.' }); repaint(); done?.(); })
+      .catch((e) => { mem.set(id, s || { err: e.message }); repaint(); done?.(); });
   }
   if (s) { if (fresh) mem.set(id, s); return s; }
   return null;
