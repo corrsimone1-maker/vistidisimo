@@ -4,8 +4,19 @@ import { category, byLast } from '../derive.js';
 import { cardFor, titleOf, emptyState } from './common.js';
 import { openLibraryMenu, hasPaused } from './menu.js';
 
-const KINDS = [['serie', 'Serie'], ['film', 'Film'], ['anime', 'Anime']];
-const STATI = [['all', 'Tutti'], ['watching', 'In corso'], ['planned', 'Da guardare'], ['uptodate', 'In pari'], ['completed', 'Completati'], ['dropped', 'Abbandonati']];
+// Tipo e stato: gli stessi filtri valgono anche nelle liste (menu ⋯ di una lista, lists.js)
+export const KINDS = [['serie', 'Serie'], ['film', 'Film'], ['anime', 'Anime']];
+export const STATI = [['all', 'Tutti'], ['watching', 'In corso'], ['planned', 'Da guardare'], ['uptodate', 'In pari'], ['completed', 'Completati'], ['dropped', 'Abbandonati']];
+export const ALL_KINDS = ['serie', 'film', 'anime'];
+
+// Tocco su un tipo: «Tutto» li riaccende tutti; da «tutti accesi» il tipo toccato resta da solo; poi si
+// aggiungono e tolgono, e senza nessuno acceso tornano tutti.
+export function toggleKinds(kinds, v) {
+  if (v === 'all') return [...ALL_KINDS];
+  if (kinds.length === ALL_KINDS.length) return [v];
+  const next = kinds.includes(v) ? kinds.filter((x) => x !== v) : [...kinds, v];
+  return next.length ? next : [...ALL_KINDS];
+}
 const SORTS = [['last', 'Ultima attività'], ['added', 'Aggiunti di recente'], ['title', 'Titolo'], ['rating', 'Voto'], ['year', 'Anno di uscita']];
 
 const F = Object.assign({ kinds: ['serie', 'film', 'anime'], status: 'all', sort: 'last', q: '' }, LS.get('vds.libf', {}), { q: '' });
@@ -64,16 +75,7 @@ export function renderLibrary() {
 }
 
 export const libraryActions = {
-  'lib-kind': (el, { rerender }) => {
-    const v = el.dataset.v;
-    if (v === 'all') F.kinds = ['serie', 'film', 'anime'];
-    else if (F.kinds.length === 3) F.kinds = [v];
-    else {
-      F.kinds = F.kinds.includes(v) ? F.kinds.filter((x) => x !== v) : [...F.kinds, v];
-      if (!F.kinds.length) F.kinds = ['serie', 'film', 'anime'];
-    }
-    save(); rerender();
-  },
+  'lib-kind': (el, { rerender }) => { F.kinds = toggleKinds(F.kinds, el.dataset.v); save(); rerender(); },
   'lib-status': (el, { rerender }) => { F.status = el.dataset.v; save(); rerender(); },
   'lib-menu': () => openLibraryMenu(),
 };

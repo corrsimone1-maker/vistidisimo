@@ -5,7 +5,7 @@ import { isAnime, isAnimeResult, progress, isWatched, isAired, epRange, watchedC
 import * as A from '../actions.js';
 import { getSeason } from './upcoming.js';
 import { titleOf, seenTitles } from './common.js';
-import { watchedEpisodeSheet } from './episode.js';
+import { watchedEpisodeSheet, openViewer } from './episode.js';
 import { openPauseEditor, pauseText } from './menu.js';
 import { collectionSection, collectionEditSheet } from './collezione.js';
 import { fillerInfo } from '../filler.js';
@@ -72,6 +72,42 @@ function trailerSheet(t) {
       <a class="btn ghost" href="https://www.youtube.com/watch?v=${encodeURIComponent(t.key)}" target="_blank" rel="noopener">Apri su YouTube</a>
       <button class="btn primary" data-close>Chiudi</button>
     </div>`), { className: 'tr-sheet' });
+}
+
+// ---------- immagini del film ----------
+// Come nella scheda di un episodio: foto del film per riconoscerlo quando il titolo non dice niente. Sono i banner
+// di TMDB, prima quelli senza scritte (scene vere), poi, se sono poche, gli altri. Una richiesta per film a
+// sessione (condivisa col foglio «Cambia banner», `imagesCache`).
+const FILM_SHOTS = 12;
+const filmShots = new Map(); // key -> [percorsi] | 'loading' | null (nessuna o errore)
+
+function pickShots(backdrops) {
+  const clean = backdrops.filter((x) => x.l == null);
+  const text = backdrops.filter((x) => x.l != null);
+  const list = clean.length >= 6 ? clean : [...clean, ...text];
+  return [...new Set(list.map((x) => x.p))].slice(0, FILM_SHOTS);
+}
+
+function filmShotsOf(key) {
+  if (!key.startsWith('movie:') || !tmdbToken()) return null;
+  if (!filmShots.has(key)) {
+    filmShots.set(key, 'loading');
+    const cached = imagesCache.get(key);
+    (cached ? Promise.resolve(cached) : fetchImages('movie', Number(key.split(':')[1])).then((data) => { imagesCache.set(key, data); return data; }))
+      .then((data) => { filmShots.set(key, pickShots(data.backdrops)); if (cur.key === key) repaint(); })
+      .catch(() => filmShots.set(key, null));
+  }
+  return filmShots.get(key);
+}
+
+function shotsSection(key) {
+  const v = filmShotsOf(key);
+  if (v === 'loading') return html`<p class="muted pad epd-loading">Carico le immagini…</p>`;
+  if (!v?.length) return '';
+  return html`<section class="d-sec">
+    <h2>Immagini <span class="count">${v.length}</span></h2>
+    <div class="stills">${v.map((p, i) => html`<button class="still" data-act="mv-view" data-i="${i}" aria-label="Apri l’immagine ${i + 1}"><img loading="lazy" src="${img(p, 'w300')}" alt=""></button>`)}</div>
+  </section>`;
 }
 
 // ---------- quanto manca ----------
@@ -193,6 +229,48 @@ function rewatchSheet() {
   });
 }
 
+// Post-it (chiesto da Simo il 15/11/2026): la nota si scrive dal menu ⋯ del titolo; se c'è, accanto al ↻
+// compare un cerchietto giallo con (!) che la apre. Niente riquadri nella pagina.
+function noteChip(it) {
+  if (!it?.note) return '';
+  return html`<button class="note-chip" data-act="d-note" aria-label="Post-it">!</button>`;
+}
+
+function noteViewSheet() {
+  const key = cur.key; const it = item(key);
+  if (!it?.note) return;
+  openSheet(String(html`
+    <div class="note-text">${it.note}</div>
+    <div class="sheet-actions">
+      <button class="btn note-btn" data-edit>Modifica</button>
+      <button class="btn note-btn solid" data-close>Fatto</button>
+    </div>`), {
+    className: 'note-sheet',
+    onMount: (el, close) => { el.querySelector('[data-edit]').onclick = () => { close(); setTimeout(() => noteEditSheet(), 230); }; },
+  });
+}
+
+function noteEditSheet() {
+  const key = cur.key; const it = item(key);
+  if (!it) return;
+  openSheet(String(html`
+    <h3 class="sheet-title">Post-it</h3>
+    <textarea class="note-field" rows="6" maxlength="${A.NOTE_MAX}" placeholder="Scrivi una nota" autocomplete="off" autocorrect="on"></textarea>
+    <div class="sheet-actions">
+      ${it.note ? html`<button class="btn danger-ghost" data-clear>Togli</button>` : html`<button class="btn ghost" data-close>Annulla</button>`}
+      <button class="btn primary" data-ok>Salva</button>
+    </div>`), {
+    className: 'note-edit-sheet',
+    onMount: (el, close) => {
+      const ta = el.querySelector('textarea');
+      ta.value = it.note || '';
+      el.querySelector('[data-ok]').onclick = () => { A.setNote(key, ta.value); close(); };
+      el.querySelector('[data-clear]')?.addEventListener('click', () => { A.setNote(key, ''); close(); });
+      setTimeout(() => ta.focus(), 250);
+    },
+  });
+}
+
 // Episodio (o film) lasciato a metà: nella tabella dei dati, toccandolo si cambia o si toglie.
 function pauseFact(it) {
   return html`<button class="pz-fact" data-act="d-pause"><i></i>${pauseText(it)}</button>`;
@@ -300,7 +378,7 @@ export function renderDetail(type, id, rerender) {
         ${trailer ? html`<button class="trailer-btn" data-act="d-trailer">${icon.play}Trailer</button>` : ''}
       </div>
     </div>
-    <div class="d-status"><div class="d-status-row">${statusArea}${rewatchChip(it)}</div>${it ? tube(it.status, p) : ''}</div>
+    <div class="d-status"><div class="d-status-row">${statusArea}${rewatchChip(it)}${noteChip(it)}</div>${it ? tube(it.status, p) : ''}</div>
     ${it ? html`<button class="rating-box ${it.rating != null ? 'has' : ''}" data-act="d-rate">
         ${it.rating != null ? html`<span class="rate-num">${fmtRating(it.rating)}</span><span class="rate-l">Il tuo voto<small>tocca per cambiarlo</small></span>` : html`<span class="rate-l">Dai un voto<small>da 0.1 a 10.0</small></span>`}
       </button>` : ''}
@@ -308,6 +386,7 @@ export function renderDetail(type, id, rerender) {
     ${facts.length ? html`<dl class="facts">${facts.map(([k, v]) => html`<div><dt>${k}</dt><dd>${v}</dd></div>`)}</dl>` : ''}
     ${resumeHtml(key, it)}
     ${seasonsHtml}
+    ${type === 'movie' ? shotsSection(key) : ''}
     ${colX ? collectionSection(key, colX, rerender) : ''}
     <section class="d-sec">
       <h2>Liste</h2>
@@ -388,12 +467,14 @@ function moreSheet() {
       <button class="btn ghost" data-art="backdrop">${icon.image}Cambia banner</button>
     </div>
     <button class="btn ghost wide" data-pause>${icon.bookmark}${it.pause ? 'Cambia dove mi sono fermato' : 'Segna dove mi sono fermato'}</button>
+    <button class="btn ghost wide" data-note>${icon.note}${it.note ? 'Modifica il post-it' : 'Lascia un post-it'}</button>
     <button class="btn ghost wide" data-col>${icon.saga}Modifica la collezione</button>` : ''}
     <a class="btn ghost wide" href="https://www.themoviedb.org/${type}/${id}" target="_blank" rel="noopener">Apri su TMDB</a>
     ${it ? html`<button class="btn danger-ghost wide" data-remove>Rimuovi dalla libreria</button>` : ''}`), {
     onMount: (el, close) => {
       el.querySelectorAll('[data-art]').forEach((b) => { b.onclick = () => { close(); setTimeout(() => artworkSheet(key, b.dataset.art), 230); }; });
       el.querySelector('[data-pause]')?.addEventListener('click', () => { close(); setTimeout(() => openPauseEditor(key), 230); });
+      el.querySelector('[data-note]')?.addEventListener('click', () => { close(); setTimeout(() => noteEditSheet(), 230); });
       el.querySelector('[data-col]')?.addEventListener('click', () => { close(); setTimeout(() => collectionEditSheet(key), 230); });
       el.querySelectorAll('[data-anime]').forEach((b) => {
         b.onclick = () => { const v = b.dataset.anime; A.setAnime(key, v === 'auto' ? undefined : v === 'yes'); close(); };
@@ -580,6 +661,10 @@ function toggleSeason(s) {
 
 export const detailActions = {
   'd-trailer': () => { const t = trailers.get(cur.key); if (t && t !== 'loading') trailerSheet(t); },
+  'mv-view': (el) => {
+    const paths = filmShots.get(cur.key);
+    if (Array.isArray(paths) && paths.length) openViewer(paths, Math.min(paths.length - 1, Number(el.dataset.i) || 0));
+  },
   'd-ep': (el) => toggleEpisode(Number(el.dataset.s), Number(el.dataset.e)),
   'd-season': (el, { rerender }) => { const s = Number(el.dataset.s); if (cur.open.has(s)) cur.open.delete(s); else cur.open.add(s); rerender(); },
   'd-season-all': (el) => toggleSeason(Number(el.dataset.s)),
@@ -589,6 +674,7 @@ export const detailActions = {
   'd-fav': () => { A.toggleFav(cur.key, info()); },
   'd-add': (el) => { A.setStatus(cur.key, el.dataset.st, info()); toast(el.dataset.st === 'completed' ? 'Segnato come visto' : 'Aggiunto a da guardare'); },
   'd-rw': () => rewatchSheet(),
+  'd-note': () => noteViewSheet(),
   'd-pause': () => openPauseEditor(cur.key),
   'd-lists': () => listsSheet(cur.key, info()),
 };

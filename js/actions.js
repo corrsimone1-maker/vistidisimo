@@ -183,6 +183,17 @@ export function rewatchSeason(key, s, delta = 1) {
   }
 }
 
+// Post-it: una nota libera su una serie o un film (`note` dell'item). Valore assoluto, quindi si può
+// riapplicare; vuoto = si toglie. Non cambia `last`.
+export const NOTE_MAX = 1000;
+export function setNote(key, text) {
+  const it = item(key);
+  if (!it) return;
+  const v = (text || '').trim().slice(0, NOTE_MAX);
+  if ((it.note || '') === v) return;
+  dispatch({ op: 'set', key, fields: { note: v || undefined }, msg: v ? `Post-it su ${it.title}` : `Toglie il post-it a ${it.title}` });
+}
+
 export function setRating(key, value) {
   const it = item(key);
   if (!it) return;

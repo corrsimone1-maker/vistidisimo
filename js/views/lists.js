@@ -1,12 +1,61 @@
-import { html, icon, img, confirmSheet, promptSheet, toast } from '../ui.js';
-import { lib, metaOf } from '../store.js';
-import { listProgress, listOrder } from '../derive.js';
+import { html, icon, img, confirmSheet, promptSheet, openSheet, toast } from '../ui.js';
+import { lib, metaOf, LS } from '../store.js';
+import { listProgress, listOrder, category } from '../derive.js';
 import * as A from '../actions.js';
 import { cardFor, emptyState } from './common.js';
 import { listCard } from './home.js';
+import { KINDS, STATI, ALL_KINDS, toggleKinds } from './library.js';
 
 let editing = null; // id della lista in modifica
 let reordering = false;
+
+// Filtri delle liste (menu ⋯ in alto a destra): gli stessi della Libreria, tipo e stato. Valgono per ogni
+// lista e si ricordano sul dispositivo; il pallino sul ⋯ dice che sono accesi.
+const LF = Object.assign({ kinds: [...ALL_KINDS], status: 'all' }, LS.get('vds.listf', {}));
+if (!Array.isArray(LF.kinds) || !LF.kinds.length) LF.kinds = [...ALL_KINDS];
+const saveLF = () => LS.set('vds.listf', { kinds: LF.kinds, status: LF.status });
+const filterOn = () => LF.kinds.length < ALL_KINDS.length || LF.status !== 'all';
+
+const kindOfEntry = (items, e) => category(items[e.key] || { type: e.key.split(':')[0] }, metaOf(e.key));
+function visibleEntries(l, items) {
+  return listOrder(l, items).filter((e) => LF.kinds.includes(kindOfEntry(items, e)) && (LF.status === 'all' || items[e.key]?.status === LF.status));
+}
+
+function filtersSheet(listId, rerender) {
+  const paint = (el) => {
+    const l = (lib()?.lists || []).find((x) => x.id === listId);
+    const items = lib()?.items || {};
+    const counts = { serie: 0, film: 0, anime: 0 };
+    for (const e of l?.items || []) counts[kindOfEntry(items, e)] += 1;
+    const allOn = LF.kinds.length === ALL_KINDS.length;
+    el.querySelector('.lf-body').innerHTML = String(html`
+      <div class="chips" role="group" aria-label="Tipo">
+        <button class="chip ${allOn ? 'on' : ''}" data-lf-kind="all">Tutto</button>
+        ${KINDS.map(([v, label]) => html`<button class="chip ${!allOn && LF.kinds.includes(v) ? 'on' : ''}" data-lf-kind="${v}">${label} <span>${counts[v]}</span></button>`)}
+      </div>
+      <div class="chips" role="group" aria-label="Stato">
+        ${STATI.map(([v, label]) => html`<button class="chip st ${v !== 'all' ? 'st-' + v : ''} ${LF.status === v ? 'on' : ''}" data-lf-status="${v}">${v !== 'all' ? html`<i></i>` : ''}${label}</button>`)}
+      </div>`);
+  };
+  openSheet(String(html`
+    <h3 class="sheet-title">Filtri</h3>
+    <div class="lf-body"></div>
+    <button class="btn primary wide" data-close>Fatto</button>`), {
+    className: 'lf-sheet',
+    onMount: (el) => {
+      paint(el);
+      // il foglio resta aperto: si vede la lista cambiare dietro
+      el.addEventListener('click', (ev) => {
+        const k = ev.target.closest('[data-lf-kind]');
+        const s = ev.target.closest('[data-lf-status]');
+        if (k) LF.kinds = toggleKinds(LF.kinds, k.dataset.lfKind);
+        else if (s) LF.status = s.dataset.lfStatus;
+        else return;
+        saveLF(); paint(el); rerender();
+      });
+    },
+  });
+}
 
 export function renderLists() {
   const L = lib();
@@ -92,14 +141,16 @@ export function renderList(id) {
   const p = listProgress(l, L.items, metaOf);
   const done = l.items.filter((e) => L.items[e.key]?.status === 'completed').length;
   const isEditing = editing === id;
+  const shown = visibleEntries(l, L.items);
   return html`
   <header class="page-top">
     <button class="icon-btn back" data-act="back" aria-label="Indietro">${icon.back}</button>
     <h1 class="wrap">${l.title}</h1>
+    <button class="icon-btn menu-btn push-right" data-act="list-filters" data-id="${l.id}" aria-label="Filtri">${icon.more}${filterOn() ? html`<span class="menu-dot lf-dot"></span>` : ''}</button>
   </header>
   <div class="list-head">
     <div class="list-pct"><b>${Math.round(p * 100)}%</b><span>completato</span></div>
-    <div class="list-sub">${l.items.length} ${l.items.length === 1 ? 'titolo' : 'titoli'}, ${done} finiti</div>
+    <div class="list-sub">${l.items.length} ${l.items.length === 1 ? 'titolo' : 'titoli'}, ${done} finiti${shown.length < l.items.length ? ` · ne vedi ${shown.length}` : ''}</div>
     <div class="tube st-list big"><i style="--p:${p.toFixed(3)}"></i></div>
     <div class="list-tools">
       <button class="btn ghost small ${isEditing ? 'on' : ''}" data-act="list-edit" data-id="${l.id}">${isEditing ? 'Fine' : 'Modifica'}</button>
@@ -107,9 +158,11 @@ export function renderList(id) {
       <button class="btn danger-ghost small" data-act="list-delete" data-id="${l.id}">Elimina</button>
     </div>
   </div>
-  ${l.items.length
-    ? html`<div class="grid ${isEditing ? 'editing' : ''}" data-list="${l.id}">${listOrder(l, lib().items).map((e) => cardFor(e.key, { fallback: e, removable: isEditing, withTitle: true }))}</div>`
-    : emptyState('Lista vuota', 'Apri una serie o un film e tocca «Gestisci liste» per aggiungerlo qui.')}`;
+  ${!l.items.length
+    ? emptyState('Lista vuota', 'Apri una serie o un film e tocca «Gestisci liste» per aggiungerlo qui.')
+    : (shown.length
+      ? html`<div class="grid ${isEditing ? 'editing' : ''}" data-list="${l.id}">${shown.map((e) => cardFor(e.key, { fallback: e, removable: isEditing, withTitle: true }))}</div>`
+      : emptyState('Niente qui', 'Prova a cambiare i filtri.'))}`;
 }
 
 export const listActions = {
@@ -120,6 +173,7 @@ export const listActions = {
     go(`#/lista/${encodeURIComponent(id)}`);
   },
   'lists-reorder': (el, { rerender }) => { reordering = !reordering; rerender(); },
+  'list-filters': (el, { rerender }) => filtersSheet(el.dataset.id, rerender),
   'list-edit': (el, { rerender }) => { editing = editing === el.dataset.id ? null : el.dataset.id; rerender(); },
   'list-rename': async (el) => {
     const l = lib().lists.find((x) => x.id === el.dataset.id);

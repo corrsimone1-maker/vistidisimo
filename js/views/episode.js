@@ -163,8 +163,8 @@ export function renderEpisode(id, s, e, rerender) {
   </div>`;
 }
 
-// Visore a tutto schermo: si scorre di lato, si chiude con la ×.
-function openViewer(paths, start) {
+// Visore a tutto schermo: si scorre di lato, si chiude con la ×. Lo usano anche le immagini dei film.
+export function openViewer(paths, start) {
   closeAllSheets();
   const root = document.getElementById('sheet-root');
   const wrap = document.createElement('div');

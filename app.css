@@ -562,6 +562,22 @@ body:has(#sheet-root .sheet-wrap.in) #toast-root { bottom: auto; top: calc(var(-
 .rw-chip svg { width: 18px; height: 18px; }
 .rw-chip b { font: 700 14px var(--f-disp); }
 .rw-chip.has { padding: 0 13px 0 11px; color: var(--blu); border-color: rgba(76, 201, 255, .45); box-shadow: 0 0 12px rgba(76, 201, 255, .18); }
+/* post-it: cerchietto giallo con (!) accanto al ↻, e la nota su carta gialla */
+.note-chip {
+  display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; flex: none;
+  background: rgba(255, 226, 90, .16); border: 1px solid rgba(255, 226, 90, .6); color: #ffe25a;
+  font: 800 17px/1 var(--f-disp); box-shadow: 0 0 12px rgba(255, 226, 90, .2);
+}
+.note-sheet { background: #f7e58a; color: #2e2600; }
+.note-sheet .sheet-handle { background: rgba(46, 38, 0, .25); }
+.note-text { margin: 4px 0 0; font-size: 16px; line-height: 1.55; font-weight: 600; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 50dvh; overflow-y: auto; }
+.note-btn { background: rgba(46, 38, 0, .1); color: #2e2600; }
+.note-btn.solid { background: #2e2600; color: #f7e58a; }
+.note-field {
+  width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(255, 226, 90, .45); background: rgba(255, 226, 90, .08);
+  color: var(--testo); font: 600 16px/1.5 var(--f-ui); outline: none; resize: none;
+}
+.note-field:focus { border-color: #ffe25a; }
 .rw-step { display: grid; grid-template-columns: 52px 1fr 52px; align-items: center; margin: 2px 0 6px; text-align: center; }
 .rw-step .icon-btn { width: 52px; height: 52px; }
 .rw-step-n { display: block; font: 700 60px/1 var(--f-disp); letter-spacing: -.05em; color: #fff; text-shadow: 0 0 8px rgba(76, 201, 255, .9), 0 0 26px rgba(76, 201, 255, .45); font-variant-numeric: tabular-nums; }
@@ -672,6 +688,10 @@ p.rp-ov { margin: 8px 0 0; font-size: 13.5px; }
 .ep-still .pc-pause { top: 5px; right: 5px; width: 8px; height: 8px; }
 .menu-dot { position: absolute; top: 8px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--sospeso); box-shadow: 0 0 0 2px var(--notte), 0 0 8px var(--sospeso); }
 .menu-btn { margin-right: -8px; }
+/* filtri accesi nelle liste (menu ⋯): pallino lilla, non rosso come «in sospeso» */
+.menu-dot.lf-dot { background: var(--lilla); box-shadow: 0 0 0 2px var(--notte), 0 0 8px var(--lilla); }
+.lf-sheet .chips { padding: 0; margin-bottom: 12px; }
+.lf-sheet .btn.wide { margin-top: 6px; }
 .pz-tag { color: var(--sospeso-t); font-weight: 800; }
 .ep-left .pz-tag { font-size: 12px; }
 .ep.paused .ep-n { color: var(--sospeso-t); }

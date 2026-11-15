@@ -43,6 +43,7 @@ export const icon = {
   menu: svg('<path d="M4 6.8h16M4 12h16M4 17.2h16"/>', 'stroke-width="2"'),
   saga: svg('<rect x="7.6" y="3.4" width="10.8" height="14.2" rx="1.8"/><path d="M5.2 6.2v12.6a1.8 1.8 0 0 0 1.8 1.8h9.6"/>'),
   play: svg('<path d="M8 5.4v13.2L18.6 12z" fill="currentColor"/>'),
+  note: svg('<path d="M5 4.2h14a1 1 0 0 1 1 1V14l-6 6H5a1 1 0 0 1-1-1V5.2a1 1 0 0 1 1-1z"/><path d="M14 20v-5a1 1 0 0 1 1-1h5"/><path d="M8 9h8M8 12.4h4"/>'),
   bookmark: svg('<path d="M6.6 3.6h10.8v16.8L12 16.6l-5.4 3.8z"/><path d="M10 8.4v4.2M14 8.4v4.2"/>'),
 };
 
