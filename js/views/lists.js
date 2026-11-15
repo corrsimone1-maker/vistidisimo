@@ -2,7 +2,7 @@ import { html, icon, img, confirmSheet, promptSheet, openSheet, toast } from '..
 import { lib, metaOf, LS } from '../store.js';
 import { listProgress, listOrder, category } from '../derive.js';
 import * as A from '../actions.js';
-import { cardFor, emptyState } from './common.js';
+import { cardFor, emptyState, titleOf } from './common.js';
 import { listCard } from './home.js';
 import { KINDS, STATI, ALL_KINDS, toggleKinds } from './library.js';
 
@@ -21,10 +21,38 @@ function visibleEntries(l, items) {
   return listOrder(l, items).filter((e) => LF.kinds.includes(kindOfEntry(items, e)) && (LF.status === 'all' || items[e.key]?.status === LF.status));
 }
 
+// Esporta come testo (chiesto da Simo il 15/11/2026): i titoli che vedi con i filtri accesi, uno per riga
+// nell'ordine della lista, «Titolo (anno)» (l'anno serve a distinguere i titoli con lo stesso nome).
+export function listText(l) {
+  const items = lib()?.items || {};
+  return visibleEntries(l, items).map((e) => {
+    const it = items[e.key]; const m = metaOf(e.key);
+    const title = titleOf(e.key, it, m) || e.title || '';
+    const y = m?.y || it?.year || e.year;
+    return y ? `${title} (${y})` : title;
+  }).join('\n');
+}
+
+// Negli appunti: l'API moderna (parte dal tocco, va anche su iPhone), se no il vecchio giro col campo di testo.
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch { /* si prova l'altro modo */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.appendChild(ta);
+    ta.select(); ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch { return false; }
+}
+
 function filtersSheet(listId, rerender) {
   const paint = (el) => {
     const l = (lib()?.lists || []).find((x) => x.id === listId);
     const items = lib()?.items || {};
+    const n = l ? visibleEntries(l, items).length : 0;
     const counts = { serie: 0, film: 0, anime: 0 };
     for (const e of l?.items || []) counts[kindOfEntry(items, e)] += 1;
     const allOn = LF.kinds.length === ALL_KINDS.length;
@@ -35,17 +63,27 @@ function filtersSheet(listId, rerender) {
       </div>
       <div class="chips" role="group" aria-label="Stato">
         ${STATI.map(([v, label]) => html`<button class="chip st ${v !== 'all' ? 'st-' + v : ''} ${LF.status === v ? 'on' : ''}" data-lf-status="${v}">${v !== 'all' ? html`<i></i>` : ''}${label}</button>`)}
-      </div>`);
+      </div>
+      <button class="btn ghost wide lf-copy" data-lf-copy ${n ? '' : 'disabled'}>${icon.copy}Copia ${n === 1 ? '1 titolo' : `${n} titoli`}</button>`);
   };
   openSheet(String(html`
     <h3 class="sheet-title">Filtri</h3>
     <div class="lf-body"></div>
     <button class="btn primary wide" data-close>Fatto</button>`), {
     className: 'lf-sheet',
-    onMount: (el) => {
+    onMount: (el, close) => {
       paint(el);
       // il foglio resta aperto: si vede la lista cambiare dietro
-      el.addEventListener('click', (ev) => {
+      el.addEventListener('click', async (ev) => {
+        if (ev.target.closest('[data-lf-copy]')) {
+          const l = (lib()?.lists || []).find((x) => x.id === listId);
+          const text = l ? listText(l) : '';
+          if (!text) return;
+          const count = text.split('\n').length;
+          const ok = await copyText(text);
+          if (ok) { close(); toast(count === 1 ? 'Copiato 1 titolo' : `Copiati ${count} titoli`); } else toast('Non riesco a copiare');
+          return;
+        }
         const k = ev.target.closest('[data-lf-kind]');
         const s = ev.target.closest('[data-lf-status]');
         if (k) LF.kinds = toggleKinds(LF.kinds, k.dataset.lfKind);

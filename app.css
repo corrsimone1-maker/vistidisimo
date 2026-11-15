@@ -692,6 +692,8 @@ p.rp-ov { margin: 8px 0 0; font-size: 13.5px; }
 .menu-dot.lf-dot { background: var(--lilla); box-shadow: 0 0 0 2px var(--notte), 0 0 8px var(--lilla); }
 .lf-sheet .chips { padding: 0; margin-bottom: 12px; }
 .lf-sheet .btn.wide { margin-top: 6px; }
+.lf-copy { margin-bottom: 4px; }
+.lf-copy svg { width: 18px; height: 18px; }
 .pz-tag { color: var(--sospeso-t); font-weight: 800; }
 .ep-left .pz-tag { font-size: 12px; }
 .ep.paused .ep-n { color: var(--sospeso-t); }
