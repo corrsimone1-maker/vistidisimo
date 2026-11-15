@@ -515,11 +515,12 @@ function countryName(code) {
   return code;
 }
 const flagOf = (code) => String.fromCodePoint(...[...code].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65));
-// Sul rettangolino c'è solo il primo paese; gli altri (dal secondo in poi) escono tenendo premuto (`data-more`).
+// Sul rettangolino c'è solo il primo paese, con «+N» se ce ne sono altri (chiesto da Simo: senza, non si capisce
+// che si può tenere premuto); gli altri (dal secondo in poi) escono tenendo premuto (`data-more`).
 function countryChip(codes) {
   if (!codes.length) return '';
   const more = codes.slice(1).map(countryName).join(' · ');
-  return html`<span class="country-chip" ${more ? raw(`data-more="${esc(more)}"`) : ''}><span class="flags" aria-hidden="true">${flagOf(codes[0])}</span>${countryName(codes[0])}</span>`;
+  return html`<span class="country-chip" ${more ? raw(`data-more="${esc(more)}"`) : ''}><span class="flags" aria-hidden="true">${flagOf(codes[0])}</span>${countryName(codes[0])}${codes.length > 1 ? html`<b class="more">+${codes.length - 1}</b>` : ''}</span>`;
 }
 // Pressione lunga sul rettangolino: un fumetto sotto con gli altri paesi finché tieni premuto (e un attimo dopo).
 let peek = null; let peekTimer = null; let peekHide = null;
