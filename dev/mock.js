@@ -8,7 +8,7 @@ const SHORTS = { 900001: 12, 900005: 40, 900006: 41, 900002: 0 };
 // newSeasons: false (di base) segna ogni serie come già annunciata (`announced`), così la finestra
 // «Nuova stagione» non copre le schermate nelle prove che non la riguardano, anche quando i dati veri
 // hanno una stagione appena uscita. La prova della finestra passa newSeasons: true.
-function makeMocks(libPath, { animeKeys = new Set(), newSeasons = false } = {}) {
+function makeMocks(libPath, { animeKeys = new Set(), newSeasons = false, countries = {} } = {}) {
   const lib = JSON.parse(fs.readFileSync(libPath, 'utf8'));
   let text = fs.readFileSync(libPath, 'utf8');
   if (!newSeasons) {
@@ -91,7 +91,7 @@ function makeMocks(libPath, { animeKeys = new Set(), newSeasons = false } = {}) 
       id, name: it ? it.title : `Serie ${id}`, original_name: it ? it.title : `Serie ${id}`, first_air_date: `${it?.year || 2020}-03-01`,
       poster_path: `/p_tv_${id}.jpg`, backdrop_path: `/b_tv_${id}.jpg`, overview: 'Una trama di prova per vedere come sta il testo nella pagina: due o tre righe che raccontano di cosa parla la serie senza svelare troppo.',
       genres: anime ? [{ id: 16, name: 'Animazione' }, { id: 10759, name: 'Action & Adventure' }] : [{ id: 18, name: 'Dramma' }, { id: 9648, name: 'Mistero' }],
-      original_language: anime ? 'ja' : 'en', origin_country: anime ? ['JP'] : ['US'], episode_run_time: [anime ? 24 : 44], status,
+      original_language: anime ? 'ja' : 'en', origin_country: countries[`tv:${id}`] || (anime ? ['JP'] : ['US']), episode_run_time: [anime ? 24 : 44], status,
       seasons, last_episode_to_air: le, next_episode_to_air: ne,
     };
   }
@@ -106,7 +106,7 @@ function makeMocks(libPath, { animeKeys = new Set(), newSeasons = false } = {}) 
       id, title: title || `Film ${id}`, original_title: title || `Film ${id}`, release_date: future ? day(12) : `${it?.year || 2010}-05-01`,
       poster_path: `/p_movie_${id}.jpg`, backdrop_path: `/b_movie_${id}.jpg`, overview: 'Trama di prova del film.',
       genres: anime ? [{ id: 16, name: 'Animazione' }, { id: 14, name: 'Fantasy' }] : [{ id: 18, name: 'Dramma' }],
-      original_language: anime ? 'ja' : 'en', origin_country: anime ? ['JP'] : ['US'], runtime: SHORTS[id] ?? 90 + (id % 50), status: 'Released',
+      original_language: anime ? 'ja' : 'en', origin_country: countries[key] || (anime ? ['JP'] : ['US']), runtime: SHORTS[id] ?? 90 + (id % 50), status: 'Released',
     };
   }
 

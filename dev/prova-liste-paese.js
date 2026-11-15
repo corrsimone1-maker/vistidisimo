@@ -31,7 +31,7 @@ fs.writeFileSync(LIB, JSON.stringify(lib));
 (async () => {
   const srv = spawn('python3', ['-m', 'http.server', '8142', '--bind', '127.0.0.1', '--directory', ROOT], { stdio: 'ignore' });
   await new Promise((r) => setTimeout(r, 800));
-  const M = makeMocks(LIB, { animeKeys: new Set(['tv:101']) });
+  const M = makeMocks(LIB, { animeKeys: new Set(['tv:101']), countries: { 'movie:129': ['US', 'GB', 'CA'], 'tv:100': ['CN', 'JP'] } });
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 393, height: 852 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   await ctx.route('https://api.github.com/**', M.github);
@@ -124,9 +124,23 @@ fs.writeFileSync(LIB, JSON.stringify(lib));
   await page.goto(base + '#/t/movie/129');
   await page.waitForSelector('.d-head');
   await page.waitForSelector('.country-chip', { timeout: 8000 }).catch(() => {});
-  check('film americano: «Stati Uniti»', /Stati Uniti/.test(await chipOf()));
+  check('tre paesi: sul rettangolino solo il primo, «USA» e non «Stati Uniti»', (await chipOf()) === 'USA' || /^\W*USA$/.test(await chipOf()));
+  check('tre paesi: gli altri sono nascosti (non ci sono UK né Canada nella pagina)', !/UK|Canada/.test(await page.$eval('.d-head', (e) => e.textContent)));
   await page.waitForSelector('.trailer-btn', { timeout: 6000 }).catch(() => {});
   await page.waitForTimeout(400);
+  {
+    // pressione lunga: compare il fumetto con gli altri paesi, e sparisce
+    const cb = await page.$eval('.country-chip', (e) => e.getBoundingClientRect().toJSON());
+    await page.mouse.move(cb.x + cb.width / 2, cb.y + cb.height / 2);
+    await page.mouse.down();
+    check('tocco breve: ancora nessun fumetto', !(await page.$('.country-peek')));
+    await page.waitForTimeout(600);
+    check('pressione lunga: fumetto con «UK · Canada»', (await page.$eval('.country-peek', (e) => e.textContent).catch(() => '')) === 'UK · Canada');
+    await page.screenshot({ path: path.join(OUT, '75-paese-pressione.png') });
+    await page.mouse.up();
+    await page.waitForTimeout(2300);
+    check('dopo aver lasciato il fumetto sparisce', !(await page.$('.country-peek')));
+  }
   const tr = await page.$('.trailer-btn');
   if (tr) {
     const c = await page.$eval('.country-chip', (e) => e.getBoundingClientRect().toJSON());
@@ -138,6 +152,10 @@ fs.writeFileSync(LIB, JSON.stringify(lib));
   await page.waitForSelector('.d-head');
   await page.waitForSelector('.country-chip', { timeout: 8000 }).catch(() => {});
   check('anime: «Giappone»', /Giappone/.test(await chipOf()));
+  await page.goto(base + '#/t/tv/100');
+  await page.waitForSelector('.d-head');
+  await page.waitForSelector('.country-chip', { timeout: 8000 }).catch(() => {});
+  check('Cina e Giappone: «Cina» (non «Cina continentale»), Giappone nascosto', /^\W*Cina$/.test(await chipOf()) && !/Giappone/.test(await page.$eval('.d-head', (e) => e.textContent)));
   const wide = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
   check('nessuna pagina più larga del telefono', !wide);
 

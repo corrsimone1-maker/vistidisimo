@@ -494,17 +494,61 @@ function countryCodes(type, d, m) {
   const fromD = d?.origin_country?.length ? d.origin_country : (d?.production_countries || []).map((c) => c.iso_3166_1);
   return [...new Set((fromD.length ? fromD : (m?.c || [])).filter((c) => /^[A-Z]{2}$/.test(c || '')))];
 }
+// Nomi corti (chiesto da Simo: «più riassuntivo possibile», USA e non Stati Uniti, Cina e non Cina continentale):
+// una tabella nostra, perché i nomi di `Intl.DisplayNames` cambiano da un telefono all'altro. Per i paesi che
+// non ci sono si usa il nome del sistema, tolto «continentale».
+const SHORT = {
+  US: 'USA', GB: 'UK', CN: 'Cina', HK: 'Hong Kong', TW: 'Taiwan', JP: 'Giappone', KR: 'Corea', KP: 'Corea del Nord',
+  ES: 'Spagna', FR: 'Francia', DE: 'Germania', IT: 'Italia', CA: 'Canada', AU: 'Australia', NZ: 'Nuova Zelanda',
+  IE: 'Irlanda', AT: 'Austria', CH: 'Svizzera', BE: 'Belgio', NL: 'Olanda', SE: 'Svezia', NO: 'Norvegia', DK: 'Danimarca',
+  FI: 'Finlandia', IS: 'Islanda', PL: 'Polonia', CZ: 'Cechia', SK: 'Slovacchia', HU: 'Ungheria', RO: 'Romania',
+  BG: 'Bulgaria', GR: 'Grecia', PT: 'Portogallo', RU: 'Russia', UA: 'Ucraina', TR: 'Turchia', IL: 'Israele',
+  IN: 'India', TH: 'Thailandia', ID: 'Indonesia', PH: 'Filippine', VN: 'Vietnam', MY: 'Malesia', SG: 'Singapore',
+  MX: 'Messico', AR: 'Argentina', BR: 'Brasile', CL: 'Cile', CO: 'Colombia', PE: 'Perù', VE: 'Venezuela', UY: 'Uruguay',
+  CU: 'Cuba', ZA: 'Sudafrica', EG: 'Egitto', MA: 'Marocco', NG: 'Nigeria', AE: 'Emirati', SA: 'Arabia Saudita',
+  IR: 'Iran', LU: 'Lussemburgo', MT: 'Malta', HR: 'Croazia', RS: 'Serbia', SI: 'Slovenia', BA: 'Bosnia', MK: 'Macedonia',
+  EE: 'Estonia', LV: 'Lettonia', LT: 'Lituania', BY: 'Bielorussia', GE: 'Georgia', AM: 'Armenia', QA: 'Qatar', LB: 'Libano',
+};
 function countryName(code) {
-  try { const n = new Intl.DisplayNames(['it'], { type: 'region' }).of(code); if (n && n !== code) return n[0].toUpperCase() + n.slice(1); } catch { /* si usa il codice */ }
+  if (SHORT[code]) return SHORT[code];
+  try { const n = new Intl.DisplayNames(['it'], { type: 'region' }).of(code); if (n && n !== code) return (n[0].toUpperCase() + n.slice(1)).replace(/\s+continentale$/i, ''); } catch { /* si usa il codice */ }
   return code;
 }
 const flagOf = (code) => String.fromCodePoint(...[...code].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65));
+// Sul rettangolino c'è solo il primo paese; gli altri (dal secondo in poi) escono tenendo premuto (`data-more`).
 function countryChip(codes) {
   if (!codes.length) return '';
-  const names = codes.slice(0, 2).map(countryName).join(' · ');
-  const more = codes.length > 2 ? ` +${codes.length - 2}` : '';
-  return html`<span class="country-chip" title="${codes.map(countryName).join(', ')}"><span class="flags" aria-hidden="true">${codes.slice(0, 2).map(flagOf).join('')}</span>${names}${more}</span>`;
+  const more = codes.slice(1).map(countryName).join(' · ');
+  return html`<span class="country-chip" ${more ? raw(`data-more="${esc(more)}"`) : ''}><span class="flags" aria-hidden="true">${flagOf(codes[0])}</span>${countryName(codes[0])}</span>`;
 }
+// Pressione lunga sul rettangolino: un fumetto sotto con gli altri paesi finché tieni premuto (e un attimo dopo).
+let peek = null; let peekTimer = null; let peekHide = null;
+function hidePeek() { clearTimeout(peekTimer); clearTimeout(peekHide); peek?.remove(); peek = null; }
+document.addEventListener('pointerdown', (ev) => {
+  const chip = ev.target.closest?.('.country-chip[data-more]');
+  if (!chip) { if (peek) hidePeek(); return; }
+  hidePeek();
+  const x0 = ev.clientX; const y0 = ev.clientY;
+  const end = (e) => {
+    document.removeEventListener('pointerup', end); document.removeEventListener('pointercancel', end); document.removeEventListener('pointermove', move);
+    clearTimeout(peekTimer);
+    if (peek && e.type === 'pointerup') peekHide = setTimeout(hidePeek, 1800); else hidePeek();
+  };
+  const move = (e) => { if (Math.hypot(e.clientX - x0, e.clientY - y0) > 12) end(e); };
+  document.addEventListener('pointerup', end); document.addEventListener('pointercancel', end); document.addEventListener('pointermove', move);
+  peekTimer = setTimeout(() => {
+    const r = chip.getBoundingClientRect();
+    peek = document.createElement('div');
+    peek.className = 'country-peek';
+    peek.textContent = chip.dataset.more;
+    document.body.appendChild(peek);
+    peek.style.left = `${Math.max(12, Math.min(r.left, innerWidth - peek.offsetWidth - 12))}px`;
+    peek.style.top = `${r.bottom + 8}px`;
+    requestAnimationFrame(() => peek?.classList.add('in'));
+  }, 350);
+});
+document.addEventListener('contextmenu', (ev) => { if (ev.target.closest?.('.country-chip')) ev.preventDefault(); });
+window.addEventListener('scroll', () => { if (peek) hidePeek(); }, { passive: true });
 
 const imagesCache = new Map(); // key -> { posters, backdrops }
 const LANG_ORDER = ['it', 'en', null, 'ja'];

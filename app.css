@@ -661,6 +661,14 @@ body:has(#sheet-root .sheet-wrap.in) #toast-root { bottom: auto; top: calc(var(-
   background: var(--velluto); color: var(--testo); font-weight: 800; font-size: 13px; white-space: nowrap;
   box-shadow: 0 0 0 1px rgba(201, 179, 255, .28);
 }
+.country-chip[data-more] { -webkit-touch-callout: none; touch-action: manipulation; }
+.country-peek {
+  position: fixed; z-index: 60; max-width: calc(100vw - 24px); padding: 8px 12px; border-radius: 10px; pointer-events: none;
+  background: var(--velluto-2); color: var(--testo); font-weight: 800; font-size: 13px;
+  box-shadow: 0 0 0 1px rgba(201, 179, 255, .35), 0 8px 24px rgba(0, 0, 0, .5);
+  opacity: 0; transform: translateY(-4px); transition: opacity .15s, transform .15s;
+}
+.country-peek.in { opacity: 1; transform: none; }
 .country-chip .flags { font-size: 15px; line-height: 1; letter-spacing: 1px; }
 .trailer-btn {
   display: inline-flex; align-items: center; gap: 6px; height: 30px; margin-top: 0; padding: 0 12px 0 10px; border-radius: 9px;
