@@ -16,6 +16,21 @@ if (!Array.isArray(LF.kinds) || !LF.kinds.length) LF.kinds = [...ALL_KINDS];
 const saveLF = () => LS.set('vds.listf', { kinds: LF.kinds, status: LF.status });
 const filterOn = () => LF.kinds.length < ALL_KINDS.length || LF.status !== 'all';
 
+// Ricerca nella lista (15/11/2026): per titolo (italiano, quello salvato, originale); si svuota quando apri
+// un'altra lista. Non tocca i filtri né l'esportazione, che seguono solo i filtri.
+let LQ = { id: null, q: '' };
+const norm = (s) => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+const queryOf = (id) => (LQ.id === id ? LQ.q : '');
+function searchEntries(l, items) {
+  const q = norm(queryOf(l.id).trim());
+  const all = visibleEntries(l, items);
+  if (!q) return all;
+  return all.filter((e) => {
+    const it = items[e.key]; const m = metaOf(e.key);
+    return norm(titleOf(e.key, it, m)).includes(q) || norm(it?.title || e.title).includes(q) || norm(m?.ot).includes(q);
+  });
+}
+
 const kindOfEntry = (items, e) => category(items[e.key] || { type: e.key.split(':')[0] }, metaOf(e.key));
 function visibleEntries(l, items) {
   return listOrder(l, items).filter((e) => LF.kinds.includes(kindOfEntry(items, e)) && (LF.status === 'all' || items[e.key]?.status === LF.status));
@@ -69,6 +84,10 @@ function filtersSheet(listId, rerender) {
   openSheet(String(html`
     <h3 class="sheet-title">Filtri</h3>
     <div class="lf-body"></div>
+    <div class="lf-manage">
+      <button class="btn ghost" data-act="list-rename" data-id="${listId}" data-close>Rinomina</button>
+      <button class="btn danger-ghost" data-act="list-delete" data-id="${listId}" data-close>Elimina</button>
+    </div>
     <button class="btn primary wide" data-close>Fatto</button>`), {
     className: 'lf-sheet',
     onMount: (el, close) => {
@@ -96,6 +115,7 @@ function filtersSheet(listId, rerender) {
 }
 
 export function renderLists() {
+  LQ = { id: null, q: '' }; // dall'elenco delle liste si riparte senza ricerca
   const L = lib();
   const lists = L?.lists || [];
   const head = html`<header class="page-top">
@@ -179,29 +199,48 @@ export function renderList(id) {
   const p = listProgress(l, L.items, metaOf);
   const done = l.items.filter((e) => L.items[e.key]?.status === 'completed').length;
   const isEditing = editing === id;
-  const shown = visibleEntries(l, L.items);
+  if (LQ.id !== id) LQ = { id, q: '' };
   return html`
   <header class="page-top">
     <button class="icon-btn back" data-act="back" aria-label="Indietro">${icon.back}</button>
     <h1 class="wrap">${l.title}</h1>
-    <button class="icon-btn menu-btn push-right" data-act="list-filters" data-id="${l.id}" aria-label="Filtri">${icon.more}${filterOn() ? html`<span class="menu-dot lf-dot"></span>` : ''}</button>
+    <button class="icon-btn menu-btn push-right" data-act="list-filters" data-id="${l.id}" aria-label="Menu della lista">${icon.more}${filterOn() ? html`<span class="menu-dot lf-dot"></span>` : ''}</button>
   </header>
   <div class="list-head">
-    <div class="list-pct"><b>${Math.round(p * 100)}%</b><span>completato</span></div>
-    <div class="list-sub">${l.items.length} ${l.items.length === 1 ? 'titolo' : 'titoli'}, ${done} finiti${shown.length < l.items.length ? ` · ne vedi ${shown.length}` : ''}</div>
-    <div class="tube st-list big"><i style="--p:${p.toFixed(3)}"></i></div>
-    <div class="list-tools">
-      <button class="btn ghost small ${isEditing ? 'on' : ''}" data-act="list-edit" data-id="${l.id}">${isEditing ? 'Fine' : 'Modifica'}</button>
-      <button class="btn ghost small" data-act="list-rename" data-id="${l.id}">Rinomina</button>
-      <button class="btn danger-ghost small" data-act="list-delete" data-id="${l.id}">Elimina</button>
+    <div class="list-pct">
+      <b>${Math.round(p * 100)}%</b><span>completato</span>
+      <button class="btn ghost small push-right ${isEditing ? 'on' : ''}" data-act="list-edit" data-id="${l.id}">${isEditing ? 'Fine' : 'Modifica'}</button>
     </div>
+    <div class="list-sub" id="list-sub">${subText(l, done)}</div>
+    <div class="tube st-list big"><i style="--p:${p.toFixed(3)}"></i></div>
+    <label class="search-box list-search">${icon.search}<input type="search" data-input="list-q" data-id="${l.id}" placeholder="Cerca nella lista" value="${queryOf(l.id)}" autocomplete="off" enterkeyhint="search"></label>
   </div>
-  ${!l.items.length
-    ? emptyState('Lista vuota', 'Apri una serie o un film e tocca «Gestisci liste» per aggiungerlo qui.')
-    : (shown.length
-      ? html`<div class="grid ${isEditing ? 'editing' : ''}" data-list="${l.id}">${shown.map((e) => cardFor(e.key, { fallback: e, removable: isEditing, withTitle: true }))}</div>`
-      : emptyState('Niente qui', 'Prova a cambiare i filtri.'))}`;
+  <div id="list-grid">${gridPart(l)}</div>`;
 }
+
+function subText(l, done) {
+  const shown = searchEntries(l, lib().items).length;
+  return `${l.items.length} ${l.items.length === 1 ? 'titolo' : 'titoli'}, ${done} finiti${shown < l.items.length ? ` · ne vedi ${shown}` : ''}`;
+}
+
+function gridPart(l) {
+  const items = lib().items;
+  if (!l.items.length) return emptyState('Lista vuota', 'Apri una serie o un film e tocca «Gestisci liste» per aggiungerlo qui.');
+  const shown = searchEntries(l, items);
+  if (!shown.length) return queryOf(l.id).trim() ? emptyState('Niente qui', 'Nessun titolo corrisponde alla ricerca.') : emptyState('Niente qui', 'Prova a cambiare i filtri.');
+  return html`<div class="grid ${editing === l.id ? 'editing' : ''}" data-list="${l.id}">${shown.map((e) => cardFor(e.key, { fallback: e, removable: editing === l.id, withTitle: true }))}</div>`;
+}
+
+export const listInputs = {
+  'list-q': (el) => {
+    const l = (lib()?.lists || []).find((x) => x.id === el.dataset.id);
+    if (!l) return;
+    LQ = { id: l.id, q: el.value };
+    const done = l.items.filter((e) => lib().items[e.key]?.status === 'completed').length;
+    const g = document.getElementById('list-grid'); if (g) g.innerHTML = String(gridPart(l));
+    const sub = document.getElementById('list-sub'); if (sub) sub.textContent = subText(l, done);
+  },
+};
 
 export const listActions = {
   'list-new': async (el, { go }) => {

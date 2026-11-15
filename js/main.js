@@ -7,7 +7,7 @@ import { renderUpcoming, upcomingActions, resetUpcomingOrder } from './views/upc
 import { renderDetail, detailActions } from './views/detail.js';
 import { renderEpisode, renderRipasso, episodeActions } from './views/episode.js';
 import { renderPerson } from './views/person.js';
-import { renderLists, renderList, listActions, initReorder } from './views/lists.js';
+import { renderLists, renderList, listActions, listInputs, initReorder } from './views/lists.js';
 import { renderSettings, settingsActions } from './views/settings.js';
 import { checkNewSeasons } from './views/newseason.js';
 import { renderSaga, renderSagas } from './views/saga.js';
@@ -137,7 +137,7 @@ const ACTIONS = {
   ...libraryActions, ...searchActions, ...upcomingActions, ...detailActions, ...episodeActions, ...listActions, ...settingsActions, ...collezioneActions, ...newsActions,
   back: () => back(),
 };
-const INPUTS = { ...libraryInputs, ...searchInputs };
+const INPUTS = { ...libraryInputs, ...searchInputs, ...listInputs };
 
 function ctx(ev) { return { rerender, go, back, ev }; }
 

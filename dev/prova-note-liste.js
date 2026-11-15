@@ -86,7 +86,7 @@ fs.writeFileSync(LIB, JSON.stringify(lib));
   await page.waitForTimeout(300);
   check('filtri: film + completati = 1', JSON.stringify(await cards()) === JSON.stringify(['La città incantata']));
   await page.screenshot({ path: path.join(OUT, '63-filtri.png') });
-  await page.click('.lf-sheet [data-close]');
+  await page.click('.lf-sheet .btn.primary[data-close]');
   await page.waitForSelector('.sheet-wrap', { state: 'detached' });
   check('filtri accesi: pallino sul ⋯ e «ne vedi 1»', !!(await page.$('.lf-dot')) && /ne vedi 1/.test(await page.$eval('.list-sub', (e) => e.textContent)));
   check('filtri: la percentuale resta quella di tutta la lista', (await page.$eval('.list-pct b', (e) => e.textContent)) !== '');
@@ -110,7 +110,7 @@ fs.writeFileSync(LIB, JSON.stringify(lib));
   await page.click('[data-lf-kind=all]');
   await page.waitForTimeout(300);
   check('filtri: «Tutto» li riaccende tutti', (await cards()).length === 4);
-  await page.click('.lf-sheet [data-close]');
+  await page.click('.lf-sheet .btn.primary[data-close]');
   await page.waitForSelector('.sheet-wrap', { state: 'detached' });
   check('nessun filtro: pallino spento', !(await page.$('.lf-dot')));
   // nessun risultato
@@ -150,7 +150,7 @@ fs.writeFileSync(LIB, JSON.stringify(lib));
   check('esporta: solo gli anime', (await clip()) === 'Anime finito (2015)');
   await page.click('[data-act=list-filters]');
   await page.click('[data-lf-kind=all]');
-  await page.click('.lf-sheet [data-close]');
+  await page.click('.lf-sheet .btn.primary[data-close]');
   await page.waitForSelector('.sheet-wrap', { state: 'detached' });
 
   // ---------- post-it ----------

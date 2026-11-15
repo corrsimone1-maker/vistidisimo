@@ -305,6 +305,7 @@ export function renderDetail(type, id, rerender) {
   const inLists = (L?.lists || []).filter((l) => l.items.some((e) => e.key === key));
   const p = it ? progress(it, m) : 0;
   const trailer = trailerOf(type, id);
+  const countries = countryCodes(type, d, m);
 
   const chips = [
     html`<span class="chip-s">${kindBadge({ type, anime })}${anime ? 'Anime' : ''}${anime ? ' ' : ''}${type === 'tv' ? (anime ? 'serie' : 'Serie') : (anime ? 'film' : 'Film')}</span>`,
@@ -375,7 +376,7 @@ export function renderDetail(type, id, rerender) {
         <h1>${title}</h1>
         ${orig && norm(orig) !== norm(title) ? html`<p class="d-orig">${orig}</p>` : ''}
         <div class="d-chips">${chips}</div>
-        ${trailer ? html`<button class="trailer-btn" data-act="d-trailer">${icon.play}Trailer</button>` : ''}
+        ${countries.length || trailer ? html`<div class="d-line">${countryChip(countries)}${trailer ? html`<button class="trailer-btn" data-act="d-trailer">${icon.play}Trailer</button>` : ''}</div>` : ''}
       </div>
     </div>
     <div class="d-status"><div class="d-status-row">${statusArea}${rewatchChip(it)}${noteChip(it)}</div>${it ? tube(it.status, p) : ''}</div>
@@ -485,6 +486,26 @@ function moreSheet() {
 }
 
 // ---------- copertina e banner ----------
+// ---------- paese ----------
+// Paese di produzione dai dati di TMDB (chiesto da Simo il 15/11/2026): un film in spagnolo ma argentino
+// dice «Argentina», non «Spagna». Si usa il paese d'origine di TMDB, o in mancanza quelli di produzione, o
+// quello già salvato in meta.json; più di due si accorciano in «+N».
+function countryCodes(type, d, m) {
+  const fromD = d?.origin_country?.length ? d.origin_country : (d?.production_countries || []).map((c) => c.iso_3166_1);
+  return [...new Set((fromD.length ? fromD : (m?.c || [])).filter((c) => /^[A-Z]{2}$/.test(c || '')))];
+}
+function countryName(code) {
+  try { const n = new Intl.DisplayNames(['it'], { type: 'region' }).of(code); if (n && n !== code) return n[0].toUpperCase() + n.slice(1); } catch { /* si usa il codice */ }
+  return code;
+}
+const flagOf = (code) => String.fromCodePoint(...[...code].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65));
+function countryChip(codes) {
+  if (!codes.length) return '';
+  const names = codes.slice(0, 2).map(countryName).join(' · ');
+  const more = codes.length > 2 ? ` +${codes.length - 2}` : '';
+  return html`<span class="country-chip" title="${codes.map(countryName).join(', ')}"><span class="flags" aria-hidden="true">${codes.slice(0, 2).map(flagOf).join('')}</span>${names}${more}</span>`;
+}
+
 const imagesCache = new Map(); // key -> { posters, backdrops }
 const LANG_ORDER = ['it', 'en', null, 'ja'];
 function langName(l) {
