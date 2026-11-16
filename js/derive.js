@@ -73,6 +73,16 @@ export function isAnime(it, m) {
   return (m.g || []).includes(16) && (m.l === 'ja' || (m.c || []).includes('JP'));
 }
 
+// Serie o film spagnolo (lista «span» di Simo): paese d'origine Spagna e lingua originale spagnolo, catalano,
+// galiziano o basco. Le coproduzioni in inglese (Carnage, The Titan) e i titoli argentini, messicani… no.
+// Gli anime restano anime (il segno rosa vince).
+const ES_LANGS = ['es', 'ca', 'gl', 'eu'];
+export const spanishBy = (codes, lang) => (codes || []).includes('ES') && ES_LANGS.includes(lang);
+export function isSpanish(it, m) {
+  if (!m || isAnime(it || {}, m)) return false;
+  return spanishBy(m.c, m.l);
+}
+
 // Anime da un risultato di ricerca TMDB (ha genre_ids, original_language, origin_country).
 export function isAnimeResult(r) {
   return (r.genre_ids || []).includes(16) && (r.original_language === 'ja' || (r.origin_country || []).includes('JP'));

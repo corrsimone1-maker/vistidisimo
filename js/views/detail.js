@@ -1,7 +1,7 @@
 import { html, raw, icon, img, fmtRating, fmtDay, today, statusLabel, openSheet, confirmSheet, promptSheet, toast, kindBadge, tube, esc, fmtClock } from '../ui.js';
 import { item, metaOf, lib, putMeta, scheduleMetaSave } from '../store.js';
 import { fetchDetails, fetchImages, metaFromDetails, tmdbToken, movieDirectors, fetchTrailer, nonLatin, romajiFromTitles } from '../tmdb.js';
-import { isAnime, isAnimeResult, progress, isWatched, isAired, epRange, watchedCount, airedCount, rewatchOf, furthest, unwatchedAired, seasonTimes, seriesTimes } from '../derive.js';
+import { isAnime, isAnimeResult, spanishBy, progress, isWatched, isAired, epRange, watchedCount, airedCount, rewatchOf, furthest, unwatchedAired, seasonTimes, seriesTimes } from '../derive.js';
 import * as A from '../actions.js';
 import { getSeason } from './upcoming.js';
 import { titleOf, seenTitles } from './common.js';
@@ -308,7 +308,7 @@ export function renderDetail(type, id, rerender) {
   const countries = countryCodes(type, d, m);
 
   const chips = [
-    html`<span class="chip-s">${kindBadge({ type, anime })}${anime ? 'Anime' : ''}${anime ? ' ' : ''}${type === 'tv' ? (anime ? 'serie' : 'Serie') : (anime ? 'film' : 'Film')}</span>`,
+    html`<span class="chip-s">${kindBadge({ type, anime, es: spanishBy(countries, d?.original_language || m?.l) })}${anime ? 'Anime' : ''}${anime ? ' ' : ''}${type === 'tv' ? (anime ? 'serie' : 'Serie') : (anime ? 'film' : 'Film')}</span>`,
     yr ? html`<span class="chip-s">${yr}</span>` : '',
     ...genres.map((g) => html`<span class="chip-s">${g}</span>`),
   ];

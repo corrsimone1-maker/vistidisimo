@@ -71,8 +71,9 @@ export function tube(status, p) {
 }
 
 export function kindBadge(kind) {
-  // kind: { type: 'tv'|'movie', anime: bool }
-  return html`<span class="kind${kind.anime ? ' is-anime' : ''}" title="${kind.anime ? 'Anime · ' : ''}${kind.type === 'tv' ? 'Serie' : 'Film'}">${kind.type === 'tv' ? icon.tv : icon.film}</span>`;
+  // kind: { type: 'tv'|'movie', anime: bool, es: bool (spagnolo) }
+  const es = kind.es && !kind.anime;
+  return html`<span class="kind${kind.anime ? ' is-anime' : ''}${es ? ' is-es' : ''}" title="${kind.anime ? 'Anime · ' : ''}${es ? 'Spagna · ' : ''}${kind.type === 'tv' ? 'Serie' : 'Film'}">${kind.type === 'tv' ? icon.tv : icon.film}</span>`;
 }
 
 export function fmtRating(r) { return r == null ? '' : Number(r).toFixed(1); }

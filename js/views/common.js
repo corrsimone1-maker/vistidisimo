@@ -1,7 +1,7 @@
 import { html, posterCard, icon } from '../ui.js';
 import { nonLatin } from '../tmdb.js';
 import { item, metaOf, S } from '../store.js';
-import { isAnime, progress, isAnimeResult } from '../derive.js';
+import { isAnime, isSpanish, progress, isAnimeResult } from '../derive.js';
 
 // Titolo e anno dei titoli aperti in questa sessione (anche quelli non in libreria): servono alla
 // scheda episodio di una serie che non hai ancora aggiunto.
@@ -26,7 +26,7 @@ export function cardFor(key, { fallback, removable = false, extra, withTitle = f
     href: `#/t/${key.replace(':', '/')}`,
     title,
     poster: it?.poster || m?.p || null,
-    kind: { type, anime: isAnime(it || {}, m) },
+    kind: { type, anime: isAnime(it || {}, m), es: isSpanish(it || {}, m) },
     status: it?.status || null,
     progress: it ? progress(it, m) : 0,
     rating: it?.rating ?? null,
