@@ -492,8 +492,11 @@ function moreSheet() {
 // quello già salvato in meta.json; più di due si accorciano in «+N».
 function countryCodes(type, d, m) {
   const fromD = d?.origin_country?.length ? d.origin_country : (d?.production_countries || []).map((c) => c.iso_3166_1);
-  return [...new Set((fromD.length ? fromD : (m?.c || [])).filter((c) => /^[A-Z]{2}$/.test(c || '')))];
+  return [...new Set((fromD.length ? fromD : (m?.c || [])).filter((c) => /^[A-Z]{2}$/.test(c || '')).map((c) => LEGACY[c] || c))];
 }
+// TMDB usa ancora i codici di paesi che non esistono più (Stalker è «SU»: l'emoji 🇸🇺 non è una bandiera e
+// non si vedeva niente): si usa lo stato che è venuto dopo, bandiera e nome compresi (Simo, 16/11/2026: «la Russia»).
+const LEGACY = { SU: 'RU', DD: 'DE', YU: 'RS', CS: 'RS', XC: 'CZ' };
 // Nomi corti (chiesto da Simo: «più riassuntivo possibile», USA e non Stati Uniti, Cina e non Cina continentale):
 // una tabella nostra, perché i nomi di `Intl.DisplayNames` cambiano da un telefono all'altro. Per i paesi che
 // non ci sono si usa il nome del sistema, tolto «continentale».

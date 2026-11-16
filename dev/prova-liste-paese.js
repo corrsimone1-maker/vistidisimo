@@ -18,6 +18,7 @@ const lib = {
     'movie:129': mk('movie', 129, 'La città incantata', 'completed', { seen: '2026-10-01' }),
     'movie:130': mk('movie', 130, 'Film da vedere', 'planned'),
     'tv:100': mk('tv', 100, 'Serie in corso', 'watching', { eps: { 1: { 1: '2026-10-01', 2: '2026-10-02' } } }),
+    'movie:132': mk('movie', 132, 'Film sovietico', 'completed', { seen: '2026-10-05' }),
     'tv:101': mk('tv', 101, 'Anime finito', 'completed', { eps: { 1: { 1: '2026-09-01', 2: '2026-09-02' } } }),
   },
   lists: [{ id: 'l1', title: 'Mista', added: NOW, items: [
@@ -31,7 +32,7 @@ fs.writeFileSync(LIB, JSON.stringify(lib));
 (async () => {
   const srv = spawn('python3', ['-m', 'http.server', '8142', '--bind', '127.0.0.1', '--directory', ROOT], { stdio: 'ignore' });
   await new Promise((r) => setTimeout(r, 800));
-  const M = makeMocks(LIB, { animeKeys: new Set(['tv:101']), countries: { 'movie:129': ['US', 'GB', 'CA'], 'tv:100': ['CN', 'JP'] } });
+  const M = makeMocks(LIB, { animeKeys: new Set(['tv:101']), countries: { 'movie:129': ['US', 'GB', 'CA'], 'tv:100': ['CN', 'JP'], 'movie:132': ['SU'] } });
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ viewport: { width: 393, height: 852 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
   await ctx.route('https://api.github.com/**', M.github);
@@ -156,6 +157,10 @@ fs.writeFileSync(LIB, JSON.stringify(lib));
   await page.waitForSelector('.d-head');
   await page.waitForSelector('.country-chip', { timeout: 8000 }).catch(() => {});
   check('Cina e Giappone: «Cina» (non «Cina continentale»), Giappone nascosto', /^\W*Cina\s*\+1$/.test(await chipOf()) && !/Giappone/.test(await page.$eval('.d-head', (e) => e.textContent)));
+  await page.goto(base + '#/t/movie/132');
+  await page.waitForSelector('.d-head');
+  await page.waitForSelector('.country-chip', { timeout: 8000 }).catch(() => {});
+  check('codice «SU» (Stalker): «Russia» con la bandiera 🇷🇺, non 🇸🇺', /Russia/.test(await chipOf()) && (await page.$eval('.country-chip .flags', (e) => e.textContent)) === '\u{1F1F7}\u{1F1FA}');
   const wide = await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1);
   check('nessuna pagina più larga del telefono', !wide);
 
