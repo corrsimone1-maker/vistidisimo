@@ -78,7 +78,7 @@ fs.writeFileSync(LIB, JSON.stringify(lib));
   await page.waitForSelector('.lf-sheet');
   const chips = await page.$$eval('.lf-sheet .chip', (e) => e.map((x) => x.textContent.trim().replace(/\s+/g, ' ')));
   console.log('    chip:', chips.join(' | '));
-  check('filtri: Tutto, Serie, Film, Anime e gli stati della Libreria', chips.length === 4 + 6 && chips.includes('Film 2') && chips.includes('Serie 1') && chips.includes('Anime 1'));
+  check('filtri: Tutto, Serie, Film, Anime gli stati della Libreria e i 7 ordini', chips.length === 4 + 6 + 7 && chips.includes('Film 2') && chips.includes('Serie 1') && chips.includes('Anime 1'));
   await page.click('[data-lf-kind=film]');
   await page.waitForTimeout(300);
   check('filtri: solo film; il foglio resta aperto', JSON.stringify(await cards()) === JSON.stringify(['La città incantata', 'Film da vedere']) && (await sheet()));

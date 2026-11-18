@@ -1,6 +1,6 @@
 import { html, icon } from '../ui.js';
 import { lib, metaOf, LS } from '../store.js';
-import { category, byLast } from '../derive.js';
+import { category, byLast, watchDate } from '../derive.js';
 import { cardFor, titleOf, emptyState } from './common.js';
 import { openLibraryMenu, hasPaused } from './menu.js';
 
@@ -17,7 +17,10 @@ export function toggleKinds(kinds, v) {
   const next = kinds.includes(v) ? kinds.filter((x) => x !== v) : [...kinds, v];
   return next.length ? next : [...ALL_KINDS];
 }
-const SORTS = [['last', 'Ultima attività'], ['added', 'Aggiunti di recente'], ['title', 'Titolo'], ['rating', 'Voto'], ['year', 'Anno di uscita']];
+// Ordini (stessi nomi nelle liste, dove c'è in più «Ordine della lista»): sempre dal più recente / più alto
+// (chiesto da Simo il 18/11/2026). «Ultimo visto» = data dell'ultimo episodio o del film visto; «Ultima attività»
+// conta anche aggiunte, voti e cambi di stato.
+export const SORTS = [['watched', 'Ultimo visto'], ['rating', 'Voto più alto'], ['last', 'Ultima attività'], ['added', 'Aggiunti di recente'], ['year', 'Anno di uscita'], ['title', 'Titolo A–Z']];
 
 const F = Object.assign({ kinds: ['serie', 'film', 'anime'], status: 'all', sort: 'last', q: '' }, LS.get('vds.libf', {}), { q: '' });
 const save = () => LS.set('vds.libf', { kinds: F.kinds, status: F.status, sort: F.sort });
@@ -32,7 +35,9 @@ function filtered() {
   if (F.status !== 'all') list = list.filter((x) => x.it.status === F.status);
   if (q) list = list.filter((x) => norm(titleOf(x.k, x.it, x.m)).includes(q) || norm(x.it.title).includes(q) || norm(x.m?.ot).includes(q));
   const t = (x) => titleOf(x.k, x.it, x.m);
+  const wd = new Map(list.map((x) => [x.k, watchDate(x.it)]));
   const sorters = {
+    watched: (a, b) => (wd.get(b.k) || '').localeCompare(wd.get(a.k) || '') || byLast(a, b),
     last: byLast,
     added: (a, b) => (b.it.added || '').localeCompare(a.it.added || ''),
     title: (a, b) => t(a).localeCompare(t(b), 'it', { sensitivity: 'base' }),
@@ -45,7 +50,8 @@ function filtered() {
 function gridHtml() {
   const list = filtered();
   if (!list.length) return emptyState('Niente qui', F.q ? 'Nessun titolo corrisponde alla ricerca.' : 'Prova a cambiare i filtri.');
-  return html`<div class="grid">${list.map((x) => cardFor(x.k, { withTitle: true }))}</div>`;
+  const showRating = F.sort === 'rating'; // ordinati per voto, il voto si legge sulla locandina
+  return html`<div class="grid">${list.map((x) => cardFor(x.k, { withTitle: true, showRating }))}</div>`;
 }
 
 export function renderLibrary() {

@@ -4,17 +4,39 @@ import { listProgress, listOrder, category } from '../derive.js';
 import * as A from '../actions.js';
 import { cardFor, emptyState, titleOf } from './common.js';
 import { listCard } from './home.js';
-import { KINDS, STATI, ALL_KINDS, toggleKinds } from './library.js';
+import { KINDS, STATI, ALL_KINDS, SORTS, toggleKinds } from './library.js';
 
 let editing = null; // id della lista in modifica
 let reordering = false;
 
 // Filtri delle liste (menu ⋯ in alto a destra): gli stessi della Libreria, tipo e stato. Valgono per ogni
 // lista e si ricordano sul dispositivo; il pallino sul ⋯ dice che sono accesi.
-const LF = Object.assign({ kinds: [...ALL_KINDS], status: 'all' }, LS.get('vds.listf', {}));
+// Ordine (18/11/2026): lo stesso foglio; predefinito «Ultimo visto» (come prima), valido per ogni lista.
+const LIST_SORTS = [...SORTS, ['order', 'Ordine della lista']];
+const LF = Object.assign({ kinds: [...ALL_KINDS], status: 'all', sort: 'watched' }, LS.get('vds.listf', {}));
 if (!Array.isArray(LF.kinds) || !LF.kinds.length) LF.kinds = [...ALL_KINDS];
-const saveLF = () => LS.set('vds.listf', { kinds: LF.kinds, status: LF.status });
-const filterOn = () => LF.kinds.length < ALL_KINDS.length || LF.status !== 'all';
+if (!LIST_SORTS.some(([v]) => v === LF.sort)) LF.sort = 'watched';
+const saveLF = () => LS.set('vds.listf', { kinds: LF.kinds, status: LF.status, sort: LF.sort });
+const filterOn = () => LF.kinds.length < ALL_KINDS.length || LF.status !== 'all' || LF.sort !== 'watched';
+
+// Titoli della lista nell'ordine scelto; a pari merito (o senza dato: non in libreria, senza voto…) resta
+// l'ordine «ultimo visto», quelli mai visti nell'ordine della lista.
+function sortedEntries(l, items) {
+  const base = listOrder(l, items);
+  if (LF.sort === 'watched') return base;
+  if (LF.sort === 'order') return [...l.items];
+  const it = (e) => items[e.key];
+  const year = (e) => metaOf(e.key)?.y || it(e)?.year || e.year || 0;
+  const title = (e) => titleOf(e.key, it(e), metaOf(e.key)) || e.title || '';
+  const cmp = {
+    rating: (a, b) => (it(b)?.rating ?? -1) - (it(a)?.rating ?? -1),
+    last: (a, b) => (it(b)?.last || '').localeCompare(it(a)?.last || ''),
+    added: (a, b) => (it(b)?.added || '').localeCompare(it(a)?.added || ''),
+    year: (a, b) => year(b) - year(a),
+    title: (a, b) => title(a).localeCompare(title(b), 'it', { sensitivity: 'base' }),
+  }[LF.sort];
+  return cmp ? [...base].sort(cmp) : base;
+}
 
 // Ricerca nella lista (15/11/2026): per titolo (italiano, quello salvato, originale); si svuota quando apri
 // un'altra lista. Non tocca i filtri né l'esportazione, che seguono solo i filtri.
@@ -33,7 +55,7 @@ function searchEntries(l, items) {
 
 const kindOfEntry = (items, e) => category(items[e.key] || { type: e.key.split(':')[0] }, metaOf(e.key));
 function visibleEntries(l, items) {
-  return listOrder(l, items).filter((e) => LF.kinds.includes(kindOfEntry(items, e)) && (LF.status === 'all' || items[e.key]?.status === LF.status));
+  return sortedEntries(l, items).filter((e) => LF.kinds.includes(kindOfEntry(items, e)) && (LF.status === 'all' || items[e.key]?.status === LF.status));
 }
 
 // Esporta come testo (chiesto da Simo il 15/11/2026): i titoli che vedi con i filtri accesi, uno per riga
@@ -79,10 +101,14 @@ function filtersSheet(listId, rerender) {
       <div class="chips" role="group" aria-label="Stato">
         ${STATI.map(([v, label]) => html`<button class="chip st ${v !== 'all' ? 'st-' + v : ''} ${LF.status === v ? 'on' : ''}" data-lf-status="${v}">${v !== 'all' ? html`<i></i>` : ''}${label}</button>`)}
       </div>
+      <div class="lf-label">Ordina per</div>
+      <div class="chips" role="group" aria-label="Ordine">
+        ${LIST_SORTS.map(([v, label]) => html`<button class="chip ${LF.sort === v ? 'on' : ''}" data-lf-sort="${v}">${label}</button>`)}
+      </div>
       <button class="btn ghost wide lf-copy" data-lf-copy ${n ? '' : 'disabled'}>${icon.copy}Copia ${n === 1 ? '1 titolo' : `${n} titoli`}</button>`);
   };
   openSheet(String(html`
-    <h3 class="sheet-title">Filtri</h3>
+    <h3 class="sheet-title">Filtri e ordine</h3>
     <div class="lf-body"></div>
     <div class="lf-manage">
       <button class="btn ghost" data-act="list-rename" data-id="${listId}" data-close>Rinomina</button>
@@ -105,8 +131,10 @@ function filtersSheet(listId, rerender) {
         }
         const k = ev.target.closest('[data-lf-kind]');
         const s = ev.target.closest('[data-lf-status]');
+        const o = ev.target.closest('[data-lf-sort]');
         if (k) LF.kinds = toggleKinds(LF.kinds, k.dataset.lfKind);
         else if (s) LF.status = s.dataset.lfStatus;
+        else if (o) LF.sort = o.dataset.lfSort;
         else return;
         saveLF(); paint(el); rerender();
       });
@@ -228,7 +256,7 @@ function gridPart(l) {
   if (!l.items.length) return emptyState('Lista vuota', 'Apri una serie o un film e tocca «Gestisci liste» per aggiungerlo qui.');
   const shown = searchEntries(l, items);
   if (!shown.length) return queryOf(l.id).trim() ? emptyState('Niente qui', 'Nessun titolo corrisponde alla ricerca.') : emptyState('Niente qui', 'Prova a cambiare i filtri.');
-  return html`<div class="grid ${editing === l.id ? 'editing' : ''}" data-list="${l.id}">${shown.map((e) => cardFor(e.key, { fallback: e, removable: editing === l.id, withTitle: true }))}</div>`;
+  return html`<div class="grid ${editing === l.id ? 'editing' : ''}" data-list="${l.id}">${shown.map((e) => cardFor(e.key, { fallback: e, removable: editing === l.id, withTitle: true, showRating: LF.sort === 'rating' }))}</div>`;
 }
 
 export const listInputs = {
