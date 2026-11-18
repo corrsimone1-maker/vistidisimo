@@ -88,7 +88,7 @@ export function posterCard(c) {
     <div class="pc-img">
       ${c.poster ? html`<img loading="lazy" decoding="async" src="${img(c.poster)}" alt="">` : html`<div class="pc-ph"><span>${c.title}</span></div>`}
       ${kindBadge(c.kind)}
-      ${c.showRating && c.rating != null ? html`<span class="pc-rate">${fmtRating(c.rating)}</span>` : ''}
+      ${c.showRating && c.rating != null ? html`<span class="pc-rate">${Number.isInteger(Number(c.rating)) ? Number(c.rating) : fmtRating(c.rating)}</span>` : ''}
       ${c.paused && !c.removable ? html`<span class="pc-pause" title="In sospeso"></span>` : ''}
       ${c.removable ? html`<button class="pc-x" data-act="list-remove" data-key="${c.key}" aria-label="Togli dalla lista">${icon.x}</button>` : ''}
     </div>
